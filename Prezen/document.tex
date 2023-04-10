@@ -1,0 +1,261 @@
+\documentclass{beamer}
+\usetheme{Copenhagen}
+\usepackage{polski}
+\usepackage{amsfonts}
+\usepackage{amsmath}
+\usepackage{bm}
+\usepackage{mathtools}
+\mathtoolsset{showonlyrefs}
+%Information to be included in the title page:
+\title{Proof of Slutsky's Theorem}
+\author{Kacper Budnik}
+\institute{Wrocław University of Science and Technology}
+\date{\today}
+
+\begin{document}
+	
+	\frame{\titlepage}
+	
+	\begin{frame}
+		\frametitle{Rodzaje zbieżności}
+		\begin{block}{Zbieżność według prawdopodobieństwa}
+			Ciąg zmiennych losowych $(X_n)$ jest zbieżny według prawdopodobieństwa do $X$, jeśli
+			\begin{equation}
+				\forall\varepsilon>0\quad\lim\limits_{n\to\infty}\mathbb{P}\left(|X_n-X|>\varepsilon\right)=0.
+			\end{equation}
+		Oznaczamy $X_n\xrightarrow{\mathbb{P}}X$.
+		\end{block}
+	\end{frame}
+
+	\begin{frame}
+		\frametitle{Rodzaje zbieżności}
+		\begin{block}{Zbieżność według rozkładu}
+			Ciąg zmiennych losowych $(X_n)$ jest zbieżny według rozkładu do $X$, jeśli
+			\begin{equation}
+				\forall f\in C_b(\mathbb{R})\quad\lim\limits_{n\to\infty}\mathbb{E}f\left(X_n\right)=\mathbb{E}f\left(X\right),
+			\end{equation}
+			gdzie  $C_b(\Omega)$ jest to zbiór funkcji ciągłych i ograniczonych na $\Omega$. Oznaczamy $X_n\xrightarrow{d}X$.
+		\end{block}\pause
+		\begin{block}{Równoważny warunek}
+			Niech $X_n$ -- ciąg o dystrybuantach $F_n$ oraz $X$ -- zmienna losowa o dystrybuancie $F$, wtedy
+			\begin{equation}
+				X_n\xrightarrow{d}X \quad\iff\quad F_n(x)\to F(x)
+			\end{equation}
+			dla każdego punktu $x$ ciągłości dystrybuanty $F$.
+		\end{block}
+	\end{frame}
+	
+	\begin{frame}
+		\frametitle{Slutsky's Theorem}
+		\begin{block}{Twierdzienie Słuckiego}
+			Niech $X_n$ i $Y_n$ będą ciągami zmiennych losowych, takich, że
+			\begin{equation}
+				X_n\xrightarrow{d}X \quad\text{oraz}\quad 	Y_n\xrightarrow{\mathbb{P}}c
+			\end{equation}
+			dla pewnej zmiennej losowej $X$ i stałej $c$. Wtedy
+			\begin{itemize}
+				\item $ X_n+Y_n \xrightarrow{d} X + c $
+				\item  $Y_nX_n \xrightarrow{d} cX$
+			\end{itemize}
+		\end{block}
+	\end{frame}
+
+	\begin{frame}
+		\frametitle{Dowód dla sumy}
+		Niech $x-c$ będzie punktem ciągłości dystrybuanty $F$ zmiennej losowej $X$, wtedy dla dowolnego $\varepsilon>0$\pause
+		\begin{equation}
+			\begin{split}
+				\mathbb{P}\left(X_n+Y_n<x\right)=\mathbb{P}\left(X_n+Y_n<x,\ |Y_n-c|<\varepsilon\right)\\
+				+\mathbb{P}\left(X_n+Y_n<x,\ |Y_n-c|\geq\varepsilon\right)
+			\end{split}
+		\end{equation}\pause
+		Ponieważ $Y_n \xrightarrow{\mathbb{P}}c$, to
+		\begin{equation}
+			0\leq\mathbb{P}\left(X_n+Y_n<x,\ |Y_n-c|\geq\varepsilon\right)\leq\mathbb{P}\left(|Y_n-c|\geq\varepsilon\right)\to0.
+		\end{equation}
+	\end{frame}
+
+	\begin{frame}
+		\frametitle{Dowód cd.}
+		Dodatkowo
+		\begin{equation}
+			|Y_n-c|<\varepsilon \iff c-\varepsilon < Y_n < c+\varepsilon,
+		\end{equation}\pause
+		zatem
+		\begin{equation}
+			X_n+c-\varepsilon < X_n + Y_n < X_n +c + \varepsilon,
+		\end{equation}\pause
+		a więc
+		\begin{equation}
+			\begin{split}
+				\mathbb{P}\left(X_n+Y_n<x,\ |Y_n-c|<\varepsilon\right)\leq\mathbb{P}\left(X_n+c-\varepsilon<x,\ |Y_n-c|<\varepsilon\right)\\
+				\leq \mathbb{P}\left(X_n+c-\varepsilon<x\right)
+			\end{split}
+		\end{equation}
+	\end{frame}
+
+	\begin{frame}
+		\frametitle{Dowód cd.}
+		Z drugiej strony, korzystając z nierówności
+		\begin{equation}
+			\mathbb{P}\left(\bigcap_{k=1}^{n} A_k\right)\geq\left(\sum\limits_{k=1}^n \mathbb{P}\left(A_n\right)\right) - (n-1)
+		\end{equation}
+		dla $n=2$ \pause otrzymujemy oszacowanie dolne postaci
+		\begin{equation}
+			\begin{split}
+				\mathbb{P}\left(X_n+Y_n<x,\ |Y_n-c|<\varepsilon\right)\geq\mathbb{P}\left(X_n+c+\varepsilon<x,\ |Y_n-c|<\varepsilon\right)\\\geq
+				\mathbb{P}\left(X_n+c+\varepsilon<x\right)+	\mathbb{P}\left(|Y_n-c|<\varepsilon\right)-1.
+			\end{split}
+		\end{equation}\pause
+		Dodatkowo, ponieważ  $Y_n\xrightarrow{\mathbb{P}}c$, to
+		\begin{equation}
+			\lim\limits_{n\to\infty}\mathbb{P}\left(|Y_n-c|<\varepsilon\right)-1=0
+		\end{equation}
+	\end{frame}
+
+
+	\begin{frame}
+		\frametitle{Dowód cd.}
+		Więc zbierając wszystko razem i dobierając tak epsilona, by $F$ była ciągła na $\left[x-c-\varepsilon, x-c+\varepsilon\right]$, otrzymujemy
+%		\begin{equation}
+%			\begin{matrix}
+%				\limsup\limits_{n\to\infty}\mathbb{P}\left(X_n+Y_n<x\right)\leq\mathbb{P}\left(X_n+c-\varepsilon<x\right)&\\
+%				\liminf\limits_{n\to\infty}\mathbb{P}\left(X_n+Y_n<x\right)\geq\mathbb{P}\left(X_n+c+\varepsilon<x\right)
+%			\end{matrix}
+%		\end{equation}
+		\begin{equation}
+			\begin{split}
+				\limsup\limits_{n\to\infty}\mathbb{P}\left(X_n+Y_n<x\right)\leq\limsup\limits_{n\to\infty}\mathbb{P}\left(X_n+c-\varepsilon<x\right)\\+
+				\limsup\limits_{n\to\infty}\mathbb{P}\left(X_n+Y_n<x,\ |Y_n-c|\geq\varepsilon\right)\\=
+				\mathbb{P}\left(X+c-\varepsilon<x\right)+0.
+			\end{split}
+		\end{equation}\pause
+		Analogicznie
+		\begin{equation}
+			\begin{split}
+				\liminf\limits_{n\to\infty}\mathbb{P}\left(X_n+Y_n<x\right)\geq\liminf\limits_{n\to\infty}\mathbb{P}\left(X_n+c+\varepsilon<x\right)\\+
+%				\phantom{\liminf\limits_{n\to\infty}\mathbb{P}((((((}\\
+				\liminf\limits_{n\to\infty}\mathbb{P}\left(X_n+Y_n<x,\ |Y_n-c|\geq\varepsilon\right)\\+
+				\liminf\limits_{n\to\infty}\mathbb{P}\left(|Y_n-c|<\varepsilon\right)-1\\=
+				\mathbb{P}\left(X+c-\varepsilon<x\right)+0+0.
+			\end{split}
+		\end{equation}
+	\end{frame}
+
+	\begin{frame}
+		\frametitle{Dowód cd.}
+		Mamy więc oszacowanie górne i dolne na szukaną granicę
+		\begin{equation}
+			\mathbb{P}\left(X+c<x-\varepsilon\right)\leq \lim\limits_{n\to\infty}\mathbb{P}\left(X_n+Y_n<x\right) \leq \mathbb{P}\left(X+c<x+\varepsilon\right).
+		\end{equation}\pause
+		Korzystając teraz z ciągłości drystrybuanty w $x-c$ przechodzimy z $\varepsilon\to0^+$ otrzymując
+		\begin{equation}
+			 \lim\limits_{n\to\infty}\mathbb{P}\left(X_n+Y_n<x\right)=\mathbb{P}\left(X+c<x\right),
+		\end{equation}
+		zatem $X_n+Y_n\xrightarrow{d}X+c$.
+	\end{frame}
+
+
+
+
+
+	
+	\begin{frame}
+		\frametitle{Dowód dla iloczynu}
+		Dla dowolnego $\varepsilon>0$ doieramy $\delta>0$ taką, by punkty $\pm\varepsilon/\delta$ były punktami ciągłości dystrybuanty $F$ zmiennej losowej $X$, BSO załóżmy, że $Y_n\xrightarrow{\mathbb{P}}0$, wtedy\pause
+		\begin{equation}
+			\begin{split}
+				\mathbb{P}\left(|X_nY_n|>\varepsilon\right)=\mathbb{P}\left(|X_nY_n|>\varepsilon,|Y_n|<\delta\right)\\+
+				\mathbb{P}\left(|X_nY_n|>\varepsilon,|Y_n|\geq\delta\right)
+			\end{split}
+		\end{equation}\pause
+		Analogicznie jak wcześniej, ponieważ $Y_n\xrightarrow{\mathbb{P}}0$, to
+		\begin{equation}
+			\mathbb{P}\left(|X_nY_n|>\varepsilon,|Y_n-0|\geq\delta\right)\to0.
+		\end{equation}
+	\end{frame}
+
+	\begin{frame}
+		\frametitle{Dowód cd.}
+		Dodatkowo dla pierwszego zdarzenia $\left\{|X_nY_n|>\varepsilon,|Y_n|<\delta\right\}$ zachodzi ciąg wynikań
+		\begin{equation}
+			|Y_n|<\delta\implies\frac{1}{|Y_n|}>\frac{1}{\delta}\implies\frac{|X_nY_n|}{|Y_n|}>\frac{\varepsilon}{\delta}\implies|X_n|>\frac{\varepsilon}{\delta}
+		\end{equation}\pause
+		Zatem
+		\begin{equation}
+			\mathbb{P}\left(|X_nY_n|>\varepsilon,|Y_n|\geq\delta\right)\leq
+			\mathbb{P}\left(|X_n|>\frac{\epsilon}{\delta},|Y_n|\geq\delta\right)\leq
+			\mathbb{P}\left(|X_n|>\frac{\epsilon}{\delta}\right)
+		\end{equation}
+	\end{frame}
+
+	\begin{frame}
+		\frametitle{Dowód cd.}
+		Zbierając teraz wszystkie nierówności razem otrzymujemy
+		\begin{equation}
+			\begin{split}
+				\lim\limits_{n\to\infty}\mathbb{P}\left(|X_nY_n|>\varepsilon\right)\leq\lim\limits_{n\to\infty}\mathbb{P}\left(|Y_n|\geq\delta\right)\phantom{cccccccc}\\+
+				\lim\limits_{n\to\infty}\mathbb{P}\left(|X_n|>\frac{\varepsilon}{\delta}\right)=0+\mathbb{P}\left(|X|>\frac{\varepsilon}{\delta}\right).
+			\end{split}
+		\end{equation}\pause
+		Zmniejszając teraz $\delta\to0^+$ otrzymujemy
+		\begin{equation}
+			\lim\limits_{n\to\infty}\mathbb{P}\left(|X_nY_n|>\varepsilon\right)\leq \mathbb{P}\left(|X|=\infty\right)=0
+		\end{equation}
+		Więc $X_nY_n\xrightarrow{\mathbb{P}}0$, czyli w szczególności $X_nY_n\xrightarrow{d}0\cdot X$. \pause W ogólnym przypadku, gdy $Y_n\xrightarrow{\mathbb{P}}c$ rozpatrujemy $Z_n$ takie, że $Y_n=Z_n+c$ i wtedy $X_nY_n = X_nZ_n + cX_n$. Zmienna $X_nZ_n\xrightarrow{\mathbb{P}}0$, a $cX_n\xrightarrow{d}cX$ i stosujemy udowodnione już twierdzienie Słuckiego dla sumy. 
+	\end{frame}
+
+	\begin{frame}
+		\frametitle{Przykłady zastosowania}
+		Rozpatrzmy szereg stacjonarny $X_t$ dany wzorem
+		\begin{equation}
+			X_t-\mu=\sum_{j=-\infty}^{\infty}\psi_j Z_{t-j}, \quad\text{gdzie }\ Z_t\sim IID(0,\sigma^2),
+		\end{equation}
+		gdzie $\sum_{j=-\infty}^\infty\psi_j^2j<\infty$. Wówczas dla $h\in\left\{1, 2, \dots\right\}$ 
+		\begin{equation}
+			\hat{\boldsymbol{\rho}}(h)\sim AN(\boldsymbol\rho(h), n^{-1}W),
+		\end{equation}
+		gdzie 
+		\begin{itemize}
+			\item $\hat{\boldsymbol{\rho}}(h)=\left[\hat\rho(1),\hat\rho(2),\dots,\hat\rho(h)\right]$, \ $\hat\rho(h)$ -- estymator funkcji autokorelacji
+			\item $\boldsymbol{\rho}(h)=\left[\rho(1),\rho(2),\dots,\rho(h)\right]$, \ $\rho(h)$ --  funkcja autokorelacji
+			\item $W$--  macierz kowariancji, której element $(i, j)$ określa tzw. \emph{wzór Bartletta}.
+		\end{itemize}
+	\end{frame}
+
+	\begin{frame}
+		\frametitle{Przykłady zastosowania cd.}
+		Dodatkowo niech $\hat\gamma(h)$ będzie estymatorem funkcji autokowariancji oraz $\hat\sigma^2=\hat\gamma(0)$ będzie zbieżna wg. $\mathbb{P}$ do wariancji $\sigma^2$ szeregu $X_t$. Przekształcając wzór
+		\begin{equation}
+			\hat\rho(h)=\frac{\hat\gamma(h)}{\hat\gamma(0)}
+		\end{equation}
+		możemy otrzymać wzór na $\hat\gamma(h)$ w postaci
+		\begin{equation}
+			\hat\gamma(h)=\hat\sigma^2\hat\rho(h)
+		\end{equation}
+	\end{frame}
+
+	\begin{frame}
+		\frametitle{Przykłady zastosowania cd.}
+		Korzystając teraz z twierdzenia słuckiego dla iloczynu ciągów otrzymujemy
+		\begin{equation}
+			\hat{\boldsymbol{\gamma}}(h)\sim \sigma^2\hat{\boldsymbol{\rho}}(h)\sim AN\left(\sigma^2\boldsymbol{\rho}(h),\frac{\sigma^4}{n}W\right)\sim AN\left(\boldsymbol\gamma(h),\frac{\sigma^4}{n}W\right).
+		\end{equation}\pause
+		W szczególnym przypadku, gdy $X_t$ są niezależne, to
+		\begin{equation}
+			\gamma(h)\sim AN\left(0,\frac{\sigma^4}{n}\right).
+		\end{equation}
+	\end{frame}
+
+
+
+
+
+
+
+
+
+
+	
+	
+\end{document}

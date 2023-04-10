@@ -1,0 +1,784 @@
+---
+title: "Sprawozdanie 1"
+author: "Kacper Budnik, 262286"
+output:
+  pdf_document:
+    extra_dependencies: ["float"]
+
+date: "2023-03-31"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(fig.pos = "H", out.extra = "", echo=TRUE)
+#knitr::opts_chunk$set(echo=TRUE)
+library(xtable)
+library(dplyr)
+library(magrittr)
+library(knitr)
+library(scales)
+library(ggplot2)
+
+
+set.seed(3)
+
+uni<-function(n){
+  2*runif(n)-1
+}
+
+nor<-function(n){
+  rnorm(n)
+}
+
+bin<-function(n){
+  3*rbinom(n,1,1/3)-1
+}
+
+N=c(20,50,100,1000)
+sigma=sqrt(c(4/12,1,2))
+
+```
+
+# Symulacyjna analiza własności rozkładów asymptotycznych estymatorów średniej, autokowariancji i autokorelacji
+
+## Zdefiniowanie estymatorów
+
+Pierwsze zadanie na sprawozdaniu polega na estymacji parametrów szeregów drugiego rzędu: średniej, funkcji autokowariancji i autokorelacji. W tym celu zdefiniowaliśmy odpowiednio funkcjie.
+
+```{r}
+MEAN<-function(X){
+  sum(X)/length(X)
+}
+
+COV<-function(X,h){
+  x=MEAN(X)
+  len=length(X)
+  sum( (X[(h+1):len] - x)*(X[1:(len-h)]-x))/len
+}
+
+COR<-function(X,h){
+  COV(X,h)/COV(X,0)
+}
+
+```
+
+## Generowanie szumu
+
+W celu analizy wygenerowaliśmy szeregi czasowe typu biały szum. Do symulacji wygenerowaliśmy każdorazowo 100 realizacji szeregu. Rozpatrywaliśmy szeregi o długościach $n\in\left\{20,50,100,1000\right\}$ i rozkładach: $\mathcal{U}(-1,1)$, $\mathcal{N}(0,1)$, $3\mathcal{B}(1,0.5)-1$, oznaczające kolejno: rozkład jednostajny na $[-1,1]$, rozkład normalny standoardowy oraz rozkład dwupunktowy przyjmujący wartości w zbiorze $\left\{-1,2\right\}$. Do każdej estymacji posłużył nowo wygenerowany szereg.
+
+## Estymowanie parametru średniej
+
+```{r, results='asis', message=FALSE, warning=FALSE, echo=FALSE}
+
+res=matrix(nrow = 3, ncol=4)
+
+res[1,]= N %>% sapply(FUN=uni) %>% sapply(FUN=MEAN)
+res[2,]= N %>% sapply(FUN=nor) %>% sapply(FUN=MEAN)
+res[3,]= N %>% sapply(FUN=bin) %>% sapply(FUN=MEAN)
+
+colnames(res)<-c("n=20","n=50", "n=100","n=1000")
+row.names(res)<-c("Jednostajny","Normalny", "Dwupunktowy")
+
+print(xtable(res, caption = "Wynik średnich dla jednej próby.", floating = FALSE) ,comment=FALSE, caption.placement="top")
+
+```
+
+W powyższej tabeli możemy zauważyć, że wartości estymacji dla jednej próby znacząco odbiegają dla małych długości prób $n=20$, natomiast dla długości $n=1000$ różnicę wynoszą w przybliżeniau $0.1$ od wartości teoretycznej. Możemy się przyjrzeć jeszcze rozkładom owych estymatorów. Przyjżyjmy jak wyglądają histogramy owych zmiennych.
+
+```{r, results='asis', message=FALSE, warning=FALSE, echo=FALSE, fig.cap="Wykresy średniej dla rozkładu jednostajengo",out.width = "85%",fig.align = "center"}
+library(scales)
+
+temp=matrix(nrow=4,ncol=100)
+for(i in 1:4){
+  temp[i,]=apply(matrix(uni(N[i]*100),nrow=100),MARGIN=1,FUN=MEAN)
+}
+par(mfrow=c(2,2))
+
+for(i in 1:4){
+  temp_lab=paste("Dla szeregu o długości n =",as.character(N[i]))
+  hist(temp[i,], probability =  TRUE, main = temp_lab,xlab="")
+  curve(dnorm(x,mean=0,sd=sigma[1]/sqrt(N[i])), col="red", add=T,lwd=2)
+}
+```
+
+```{r, results='asis', message=FALSE, warning=FALSE, echo=FALSE, fig.cap="Wykresy średniej dla rozkładu normalnego.",out.width = "85%",fig.align = "center"}
+library(scales)
+
+temp=matrix(nrow=4,ncol=100)
+for(i in 1:4){
+  temp[i,]=apply(matrix(nor(N[i]*100),nrow=100),MARGIN=1,FUN=MEAN)
+}
+par(mfrow=c(2,2))
+
+for(i in 1:4){
+  temp_lab=paste("Dla szeregu o długości n =",as.character(N[i]))
+  hist(temp[i,], probability =  TRUE, main = temp_lab,xlab="")
+  curve(dnorm(x,mean=0,sd=sigma[2]/sqrt(N[i])), col="red", add=T,lwd=2)
+}
+```
+
+```{r, results='asis', message=FALSE, warning=FALSE, echo=FALSE, fig.cap="Wykresy średniej dla rozkładu dwupunktowego",out.width = "85%",fig.align = "center"}
+library(scales)
+
+temp=matrix(nrow=4,ncol=100)
+for(i in 1:4){
+  temp[i,]=apply(matrix(bin(N[i]*100),nrow=100),MARGIN=1,FUN=MEAN)
+}
+par(mfrow=c(2,2))
+
+for(i in 1:4){
+  temp_lab=paste("Dla szeregu o długości n =",as.character(N[i]))
+  hist(temp[i,], probability =  TRUE, main = temp_lab,xlab="")
+  curve(dnorm(x,mean=0,sd=sigma[3]/sqrt(N[i])), col="red", add=T,lwd=2)
+}
+```
+
+Na powyższych wykresach możemy zauważyć, że dla szumu z rozkładu normalego, krzywa która przybliża rozkład, rzeczywiście dobrze go porywa nie zależnie do wielkości n. Rozkład jednostajny, jak i dwupunktowy radzą sobie znacznie gorzej, jednak dla dużych wartości ponownie widać znaczne podobieństwa. Jednak z analizy graficznej, nie zawsze można wszystko wywnioskować. Sprawdźmy jak sobie poradzą nasze dane z testem Kołogomorowa-Smirnowa. W poniższej tabeli jest z jaką częstością \emph{wartość p} osiągała wartości większe niż $0.05$, która została oszacowana metodą Monte-Carlo.
+
+
+
+```{r, results='asis', message=FALSE, warning=FALSE, echo=FALSE}
+# parametry analizy
+K<- 100  # liczba realizacji
+ile.powtorz <- 1000 # powtórzeń
+roz=c(uni,nor,bin) # rozpatrywane rozkłady
+
+res=array(dim=c(3,4))
+
+i=0
+for(dis in roz){
+  i=i+1
+  for(j in 1:4){
+    wynik.ks <- numeric(ile.powtorz)
+    wynik.sw <- numeric(ile.powtorz)
+    for(m in 1:ile.powtorz){
+        realizacje <- matrix(dis(N[j]*K),N[j],K)
+        srednie    <- apply(realizacje, 2, MEAN)
+        
+        wynik.ks[m] <- ks.test(srednie,"pnorm", mean=0, sd=sigma[i]/sqrt(N[j]))$p.value>0.05
+        #wynik.sw[m] <- shapiro.test(srednie)$p.value>0.05
+    }
+    res[i,j]=sum(wynik.ks)/ile.powtorz
+    #res[i,j]=sum(wynik.sw)/ile.powtorz
+  }
+}
+
+colnames(res)<-c("n=20","n=50", "n=100","n=1000")
+row.names(res)<-c("Jednostajny","Normalny", "Dwupunktowy")
+
+print(xtable(res, caption = "Zgodność średnich z rozkładem normalnym.", floating = FALSE), comment=FALSE, caption.placement="top")
+
+```
+
+Jak widzimy, dla rozkładu normalnego oraz jednostajengo test w $95\%$ wskazywał poprawną wartość niezależnie od próby. W przypadku rozkładu dwupunktowego dla małych $n=20$ wartość $p$ znacząco odbiegała do pozostałych progów, natomiast dla dużego $n=1000$ wartość ta był taka sama jaką osiągneły pozostałe wykresy.
+
+## Estymowanie funckji autokorelacji
+### Estymacja punktowa
+
+```{r, results='asis', message=FALSE, warning=FALSE, echo=FALSE}
+
+res=matrix(nrow = 3, ncol=4)
+
+res[1,]= N %>% sapply(FUN=uni) %>% sapply(FUN=COV,h=0)
+res[2,]= N %>% sapply(FUN=nor) %>% sapply(FUN=COV,h=0)
+res[3,]= N %>% sapply(FUN=bin) %>% sapply(FUN=COV,h=0)
+
+colnames(res)<-c("n=20","n=50", "n=100","n=1000")
+row.names(res)<-c("Jednostajny","Normalny", "Dwupunktowy")
+
+print(xtable(res, caption = "Wynik estymacji funkcji autocovariancji dla opóźnienie $h=0$ (variancji) oraz jednej próby.", floating = FALSE), comment=FALSE, caption.placement="top")
+
+```
+
+
+```{r, results='asis', message=FALSE, warning=FALSE, echo=FALSE}
+
+res=matrix(nrow = 3, ncol=4)
+
+res[1,]= N %>% sapply(FUN=uni) %>% sapply(FUN=COV,h=1)
+res[2,]= N %>% sapply(FUN=nor) %>% sapply(FUN=COV,h=1)
+res[3,]= N %>% sapply(FUN=bin) %>% sapply(FUN=COV,h=1)
+
+colnames(res)<-c("n=20","n=50", "n=100","n=1000")
+row.names(res)<-c("Jednostajny","Normalny", "Dwupunktowy")
+
+print(xtable(res, caption = "Wynik estymacji funkcji autocovariancji dla opóźnienie $h=1$ oraz jednej próby.", floating = FALSE), comment=FALSE, caption.placement="top")
+
+```
+
+```{r, results='asis', message=FALSE, warning=FALSE, echo=FALSE}
+
+res=matrix(nrow = 3, ncol=4)
+
+res[1,]= N %>% sapply(FUN=uni) %>% sapply(FUN=COV,h=5)
+res[2,]= N %>% sapply(FUN=nor) %>% sapply(FUN=COV,h=5)
+res[3,]= N %>% sapply(FUN=bin) %>% sapply(FUN=COV,h=5)
+
+colnames(res)<-c("n=20","n=50", "n=100","n=1000")
+row.names(res)<-c("Jednostajny","Normalny", "Dwupunktowy")
+
+print(xtable(res, caption = "Wynik estymacji funkcji autocovariancji dla opóźnienie $h=5$ (variancji) oraz jednej próby.", floating = FALSE), comment=FALSE, caption.placement="top")
+
+```
+
+
+```{r, results='asis', message=FALSE, warning=FALSE, echo=FALSE}
+
+res=matrix(nrow = 3, ncol=4)
+
+res[1,]= N %>% sapply(FUN=uni) %>% sapply(FUN=COV,h=15)
+res[2,]= N %>% sapply(FUN=nor) %>% sapply(FUN=COV,h=15)
+res[3,]= N %>% sapply(FUN=bin) %>% sapply(FUN=COV,h=15)
+
+colnames(res)<-c("n=20","n=50", "n=100","n=1000")
+row.names(res)<-c("Jednostajny","Normalny", "Dwupunktowy")
+
+print(xtable(res, caption = "Wynik estymacji funkcji autocovariancji dla opóźnienie $h=15$ (variancji) oraz jednej próby.", floating = FALSE), comment=FALSE, caption.placement="top")
+
+```
+
+Z estymacji dla jednej próby możemy zauważyć w tabelach, że subiektywnie dla $n\geq20$ warotść estymowanego parametru wariancji jest zbliżona na wartości teoretycznej. Dwa pierwsze rozkłady poradziły sobie poprawnie. Natomiast rozkład dwupunktowy wykazywał znaczącą wartość covariancji nawet dla dużych wartości $n$. Sprawdźmy jak wygląda rozkład tego estymatora na wykresie
+
+
+```{r, results='asis', message=FALSE, warning=FALSE, echo=FALSE, fig.cap="Wykresy funkcji autokowariancji dla rozkładu jednostajengo i opóźnienia h=1",out.width = "85%",fig.align = "center"}
+library(scales)
+
+temp=matrix(nrow=4,ncol=100)
+for(i in 1:4){
+  temp[i,]=apply(matrix(uni(N[i]*100),nrow=100),MARGIN=1,FUN=COV,h=1)
+}
+par(mfrow=c(2,2))
+
+for(i in 1:4){
+  temp_lab=paste("Dla szeregu o długości n =",as.character(N[i]))
+  hist(temp[i,], probability =  TRUE, main = temp_lab,xlab="")
+  curve(dnorm(x,mean=0,sd=sigma[1]^2/sqrt(N[i])), col="red", add=T,lwd=2)
+}
+```
+
+
+```{r, results='asis', message=FALSE, warning=FALSE, echo=FALSE, fig.cap="Wykresy funkcji autokowariancji dla rozkładu jednostajengo i opóźnienia h równe ok. n/4",out.width = "85%",fig.align = "center"}
+library(scales)
+
+temp=matrix(nrow=4,ncol=100)
+for(i in 1:4){
+  temp[i,]=apply(matrix(uni(N[i]*100),nrow=100),MARGIN=1,FUN=COV,h=floor(N[i]/4))
+}
+par(mfrow=c(2,2))
+
+for(i in 1:4){
+  temp_lab=paste("Dla szeregu o długości n =",as.character(N[i]))
+  hist(temp[i,], probability =  TRUE, main = temp_lab,xlab="")
+  curve(dnorm(x,mean=0,sd=sigma[1]^2/sqrt(N[i])), col="red", add=T,lwd=2)
+}
+```
+
+```{r, results='asis', message=FALSE, warning=FALSE, echo=FALSE, fig.cap="Wykresy funkcji autokowariancji dla rozkładu jednostajengo i opóźnienia h równe ok. 3n/4 ",out.width = "85%",fig.align = "center"}
+library(scales)
+
+temp=matrix(nrow=4,ncol=100)
+for(i in 1:4){
+  temp[i,]=apply(matrix(uni(N[i]*100),nrow=100),MARGIN=1,FUN=COV,h=floor(3*N[i]/4))
+}
+par(mfrow=c(2,2))
+
+for(i in 1:4){
+  temp_lab=paste("Dla szeregu o długości n =",as.character(N[i]))
+  hist(temp[i,], probability =  TRUE, main = temp_lab,xlab="")
+  curve(dnorm(x,mean=0,sd=sigma[1]^2/sqrt(N[i])), col="red", add=T,lwd=2)
+}
+```
+
+```{r, results='asis', message=FALSE, warning=FALSE, echo=FALSE, fig.cap="Wykresy funkcji autokowariancji dla rozkładu normalnego i opóźnienia h równe ok. 3n/4 ",out.width = "85%",fig.align = "center"}
+library(scales)
+
+temp=matrix(nrow=4,ncol=100)
+for(i in 1:4){
+  temp[i,]=apply(matrix(nor(N[i]*100),nrow=100),MARGIN=1,FUN=COV,h=floor(3*N[i]/4))
+}
+par(mfrow=c(2,2))
+
+for(i in 1:4){
+  temp_lab=paste("Dla szeregu o długości n =",as.character(N[i]))
+  hist(temp[i,], probability =  TRUE, main = temp_lab,xlab="")
+  curve(dnorm(x,mean=0,sd=sigma[2]^2/sqrt(N[i])), col="red", add=T,lwd=2)
+}
+```
+
+```{r, results='asis', message=FALSE, warning=FALSE, echo=FALSE, fig.cap="Wykresy funkcji autokowariancji dla rozkładu dwupunktowego i opóźnienia h =1 ",out.width = "85%",fig.align = "center"}
+library(scales)
+
+temp=matrix(nrow=4,ncol=100)
+for(i in 1:4){
+  temp[i,]=apply(matrix(bin(N[i]*100),nrow=100),MARGIN=1,FUN=COV,h=1)
+}
+par(mfrow=c(2,2))
+
+for(i in 1:4){
+  temp_lab=paste("Dla szeregu o długości n =",as.character(N[i]))
+  hist(temp[i,], probability =  TRUE, main = temp_lab,xlab="")
+  curve(dnorm(x,mean=0,sd=sigma[3]^2/sqrt(N[i])), col="red", add=T,lwd=2)
+}
+```
+
+Na wykresach możemy zauważyć, że dla małych wartości $h$ względem $n$ ($h\leq n/4$) nałożona krzywa rozkładu normalnego dobrze pokrywa odtrzymane wartości. Jedynie rozkład dwumianowy potrzebuje dużej próby by się do niej dopasować. Natomiast dla dużych wartości $h=3n/4$ nawet rozkład normalny odstaje od asymptotycznej gęstości. Ponownie możemy sprawdzić wyniki jeszcze przy pomocy testy K-S, po zasadach podobnych jak poprzednio.
+
+```{r, results='asis', message=FALSE, warning=FALSE, echo=FALSE}
+# parametry analizy
+K<- 100  # liczba realizacji
+ile.powtorz <- 1000 # powtórzeń
+roz=c(uni,nor,bin) # rozpatrywane rozkłady
+
+res=array(dim=c(3,4))
+
+i=0
+for(dis in roz){
+  i=i+1
+  for(j in 1:4){
+    wynik.ks <- numeric(ile.powtorz)
+    wynik.sw <- numeric(ile.powtorz)
+    for(m in 1:ile.powtorz){
+        realizacje <- matrix(dis(N[j]*K),N[j],K)
+        srednie    <- apply(realizacje, 2, COV, h=1)
+        
+        wynik.ks[m] <- ks.test(srednie,"pnorm", mean=0, sd=sigma[i]^2/sqrt(N[j]))$p.value>0.05
+    }
+    res[i,j]=sum(wynik.ks)/ile.powtorz
+  }
+}
+
+colnames(res)<-c("n=20","n=50", "n=100","n=1000")
+row.names(res)<-c("Jednostajny","Normalny", "Dwupunktowy")
+
+print(xtable(res, caption = "Zgodność funkcji autokowariancji z rozkładem normalnym dla h=1.", floating = FALSE), comment=FALSE, caption.placement="top")
+
+```
+
+
+```{r, results='asis', message=FALSE, warning=FALSE, echo=FALSE}
+# parametry analizy
+K<- 100  # liczba realizacji
+ile.powtorz <- 1000 # powtórzeń
+roz=c(uni,nor,bin) # rozpatrywane rozkłady
+
+res=array(dim=c(3,4))
+
+i=0
+for(dis in roz){
+  i=i+1
+  for(j in 1:4){
+    wynik.ks <- numeric(ile.powtorz)
+    wynik.sw <- numeric(ile.powtorz)
+    for(m in 1:ile.powtorz){
+        realizacje <- matrix(dis(N[j]*K),N[j],K)
+        srednie    <- apply(realizacje, 2, COV, h=floor(N[j]/4))
+        
+        wynik.ks[m] <- ks.test(srednie,"pnorm", mean=0, sd=sigma[i]^2/sqrt(N[j]))$p.value>0.05
+    }
+    res[i,j]=sum(wynik.ks)/ile.powtorz
+  }
+}
+
+colnames(res)<-c("n=20","n=50", "n=100","n=1000")
+row.names(res)<-c("Jednostajny","Normalny", "Dwupunktowy")
+
+print(xtable(res, caption = "Zgodność funkcji autokowariancji z rozkładem normalnym dla h=n/4.", floating = FALSE), comment=FALSE, caption.placement="top")
+
+```
+
+
+```{r, results='asis', message=FALSE, warning=FALSE, echo=FALSE}
+# parametry analizy
+K<- 100  # liczba realizacji
+ile.powtorz <- 1000 # powtórzeń
+roz=c(uni,nor,bin) # rozpatrywane rozkłady
+
+res=array(dim=c(3,4))
+
+i=0
+for(dis in roz){
+  i=i+1
+  for(j in 1:4){
+    wynik.ks <- numeric(ile.powtorz)
+    wynik.sw <- numeric(ile.powtorz)
+    for(m in 1:ile.powtorz){
+        realizacje <- matrix(dis(N[j]*K),N[j],K)
+        srednie    <- apply(realizacje, 2, COV, h=floor(N[j]/2))
+        
+        wynik.ks[m] <- ks.test(srednie,"pnorm", mean=0, sd=sigma[i]^2/sqrt(N[j]))$p.value>0.05
+    }
+    res[i,j]=sum(wynik.ks)/ile.powtorz
+  }
+}
+
+colnames(res)<-c("n=20","n=50", "n=100","n=1000")
+row.names(res)<-c("Jednostajny","Normalny", "Dwupunktowy")
+
+print(xtable(res, caption = "Zgodność funkcji autokowariancji z rozkładem normalnym dla h=n/2.", floating = FALSE), comment=FALSE, caption.placement="top")
+
+```
+
+Na powyższych tabelach możemy zauważyć, że dla małych opóźnień ($h\leq n/4$) rozkład zbliża się do rozkładu normalnego dla $n=100$. Dla $n=1000$ częstotliwość wartości $p$ jest porównywalny z wartością $p$ dla rozkładów normalnych. Natomiast, już przy $h=n/2$ i nawet dużych $n$ częstość ta jest daleka od teoretycznych $95\%$. Ponownie potwierdziło to, że $h$ powinno być relatywnie małe w stosunku do $n$.
+
+## Estymowanie funckji autocorelacji
+### Estymacja punktowa
+
+```{r, results='asis', message=FALSE, warning=FALSE, echo=FALSE}
+
+res=matrix(nrow = 3, ncol=4)
+
+res[1,]= N %>% sapply(FUN=uni) %>% sapply(FUN=COR,h=1)
+res[2,]= N %>% sapply(FUN=nor) %>% sapply(FUN=COR,h=1)
+res[3,]= N %>% sapply(FUN=bin) %>% sapply(FUN=COR,h=1)
+
+colnames(res)<-c("n=20","n=50", "n=100","n=1000")
+row.names(res)<-c("Jednostajny","Normalny", "Dwupunktowy")
+
+print(xtable(res, caption = "Wynik estymacji funkcji autocorelcji dla opóźnienie $h=1$ (variancji) oraz jednej próby.", floating = FALSE), comment=FALSE, caption.placement="top")
+
+```
+
+
+```{r, results='asis', message=FALSE, warning=FALSE, echo=FALSE}
+
+res=matrix(nrow = 3, ncol=4)
+
+res[1,]= N %>% sapply(FUN=uni) %>% sapply(FUN=COR,h=5)
+res[2,]= N %>% sapply(FUN=nor) %>% sapply(FUN=COR,h=5)
+res[3,]= N %>% sapply(FUN=bin) %>% sapply(FUN=COR,h=5)
+
+colnames(res)<-c("n=20","n=50", "n=100","n=1000")
+row.names(res)<-c("Jednostajny","Normalny", "Dwupunktowy")
+
+print(xtable(res, caption = "Wynik estymacji funkcji autocorelcji dla opóźnienie $h=5$ (variancji) oraz jednej próby.", floating = FALSE), comment=FALSE, caption.placement="top")
+
+```
+
+
+```{r, results='asis', message=FALSE, warning=FALSE, echo=FALSE}
+
+res=matrix(nrow = 3, ncol=4)
+
+res[1,]= N %>% sapply(FUN=uni) %>% sapply(FUN=COR,h=15)
+res[2,]= N %>% sapply(FUN=nor) %>% sapply(FUN=COR,h=15)
+res[3,]= N %>% sapply(FUN=bin) %>% sapply(FUN=COR,h=15)
+
+colnames(res)<-c("n=20","n=50", "n=100","n=1000")
+row.names(res)<-c("Jednostajny","Normalny", "Dwupunktowy")
+
+print(xtable(res, caption = "Wynik estymacji funkcji autocorelcji dla opóźnienie $h=15$ (variancji) oraz jednej próby.", floating = FALSE), comment=FALSE, caption.placement="top")
+
+```
+
+Z estymacji dla jednej próby możemy zauważyć w tabelach, że dla dużych wartości $n$ wartość jest bliska 0. Dla mniejszych widać jednak statystycznie znaczące odstępstwa, szczególnie dla większych wartości $h$. Sprawdźmy jak wygląda rozkład tego estymatora na wykresie
+
+
+```{r, results='asis', message=FALSE, warning=FALSE, echo=FALSE, fig.cap="Wykresy funkcji autocorelcji dla rozkładu jednostajengo i opóźnienia h=1",out.width = "85%",fig.align = "center"}
+library(scales)
+
+temp=matrix(nrow=4,ncol=100)
+for(i in 1:4){
+  temp[i,]=apply(matrix(uni(N[i]*100),nrow=100),MARGIN=1,FUN=COR,h=1)
+}
+par(mfrow=c(2,2))
+
+for(i in 1:4){
+  temp_lab=paste("Dla szeregu o długości n =",as.character(N[i]))
+  hist(temp[i,], probability =  TRUE, main = temp_lab,xlab="")
+  curve(dnorm(x,mean=0,sd=1/sqrt(N[i])), col="red", add=T,lwd=2)
+}
+```
+
+
+```{r, results='asis', message=FALSE, warning=FALSE, echo=FALSE, fig.cap="Wykresy funkcji autocorelcji dla rozkładu jednostajengo i opóźnienia h równe ok. n/4",out.width = "85%",fig.align = "center"}
+library(scales)
+
+temp=matrix(nrow=4,ncol=100)
+for(i in 1:4){
+  temp[i,]=apply(matrix(uni(N[i]*100),nrow=100),MARGIN=1,FUN=COR,h=floor(N[i]/4))
+}
+par(mfrow=c(2,2))
+
+for(i in 1:4){
+  temp_lab=paste("Dla szeregu o długości n =",as.character(N[i]))
+  hist(temp[i,], probability =  TRUE, main = temp_lab,xlab="")
+  curve(dnorm(x,mean=0,sd=1/sqrt(N[i])), col="red", add=T,lwd=2)
+}
+```
+
+```{r, results='asis', message=FALSE, warning=FALSE, echo=FALSE, fig.cap="Wykresy funkcji autocorelcji dla rozkładu jednostajengo i opóźnienia h równe ok. 3n/4 ",out.width = "85%",fig.align = "center"}
+library(scales)
+
+temp=matrix(nrow=4,ncol=100)
+for(i in 1:4){
+  temp[i,]=apply(matrix(uni(N[i]*100),nrow=100),MARGIN=1,FUN=COR,h=floor(3*N[i]/4))
+}
+par(mfrow=c(2,2))
+
+for(i in 1:4){
+  temp_lab=paste("Dla szeregu o długości n =",as.character(N[i]))
+  hist(temp[i,], probability =  TRUE, main = temp_lab,xlab="")
+  curve(dnorm(x,mean=0,sd=1/sqrt(N[i])), col="red", add=T,lwd=2)
+}
+```
+
+```{r, results='asis', message=FALSE, warning=FALSE, echo=FALSE, fig.cap="Wykresy funkcji autocorelcji dla rozkładu normalnego i opóźnienia h równe ok. 3n/4 ",out.width = "85%",fig.align = "center"}
+library(scales)
+
+temp=matrix(nrow=4,ncol=100)
+for(i in 1:4){
+  temp[i,]=apply(matrix(nor(N[i]*100),nrow=100),MARGIN=1,FUN=COR,h=floor(3*N[i]/4))
+}
+par(mfrow=c(2,2))
+
+for(i in 1:4){
+  temp_lab=paste("Dla szeregu o długości n =",as.character(N[i]))
+  hist(temp[i,], probability =  TRUE, main = temp_lab,xlab="")
+  curve(dnorm(x,mean=0,sd=1/sqrt(N[i])), col="red", add=T,lwd=2)
+}
+```
+
+```{r, results='asis', message=FALSE, warning=FALSE, echo=FALSE, fig.cap="Wykresy funkcji autocorelcji dla rozkładu dwupunktowego i opóźnienia h =1 ",out.width = "85%",fig.align = "center"}
+library(scales)
+
+temp=matrix(nrow=4,ncol=100)
+for(i in 1:4){
+  temp[i,]=apply(matrix(bin(N[i]*100),nrow=100),MARGIN=1,FUN=COR,h=1)
+}
+par(mfrow=c(2,2))
+
+for(i in 1:4){
+  temp_lab=paste("Dla szeregu o długości n =",as.character(N[i]))
+  hist(temp[i,], probability =  TRUE, main = temp_lab,xlab="")
+  curve(dnorm(x,mean=0,sd=1/sqrt(N[i])), col="red", add=T,lwd=2)
+}
+```
+
+Na wykresach, podobnie jak wcześniej, możemy zauważyć, że dla małych wartości $h$ względem $n$ ($h\leq n/4$) nałożona krzywa rozkładu normalnego dobrze pokrywa odtrzymane wartości. Ponownie dla dużych wartości $h=3n/4$ względem $n$, możemy zauważyć, niepoprawne dopasowanie krzywej gęstości rozkładu normalnego do danych. Jeśli spojrzymy jeszcze na wartości stablicowane poniżej. 
+
+```{r, results='asis', message=FALSE, warning=FALSE, echo=FALSE}
+# parametry analizy
+K<- 100  # liczba realizacji
+ile.powtorz <- 1000 # powtórzeń
+roz=c(uni,nor,bin) # rozpatrywane rozkłady
+
+res=array(dim=c(3,4))
+
+i=0
+for(dis in roz){
+  i=i+1
+  for(j in 1:4){
+    wynik.ks <- numeric(ile.powtorz)
+    wynik.sw <- numeric(ile.powtorz)
+    for(m in 1:ile.powtorz){
+        realizacje <- matrix(dis(N[j]*K),N[j],K)
+        srednie    <- apply(realizacje, 2, COR, h=1)
+        
+        wynik.ks[m] <- ks.test(srednie,"pnorm", mean=0, sd=1/sqrt(N[j]))$p.value>0.05
+    }
+    res[i,j]=sum(wynik.ks)/ile.powtorz
+  }
+}
+
+colnames(res)<-c("n=20","n=50", "n=100","n=1000")
+row.names(res)<-c("Jednostajny","Normalny", "Dwupunktowy")
+
+print(xtable(res, caption = "Zgodność funkcji autocorelcji z rozkładem normalnym dla h=1.", floating = FALSE), comment=FALSE, caption.placement="top")
+
+```
+
+
+```{r, results='asis', message=FALSE, warning=FALSE, echo=FALSE}
+# parametry analizy
+K<- 100  # liczba realizacji
+ile.powtorz <- 1000 # powtórzeń
+roz=c(uni,nor,bin) # rozpatrywane rozkłady
+
+res=array(dim=c(3,4))
+
+i=0
+for(dis in roz){
+  i=i+1
+  for(j in 1:4){
+    wynik.ks <- numeric(ile.powtorz)
+    wynik.sw <- numeric(ile.powtorz)
+    for(m in 1:ile.powtorz){
+        realizacje <- matrix(dis(N[j]*K),N[j],K)
+        srednie    <- apply(realizacje, 2, COR, h=floor(N[j]/4))
+        
+        wynik.ks[m] <- ks.test(srednie,"pnorm", mean=0, sd=1/sqrt(N[j]))$p.value>0.05
+    }
+    res[i,j]=sum(wynik.ks)/ile.powtorz
+  }
+}
+
+colnames(res)<-c("n=20","n=50", "n=100","n=1000")
+row.names(res)<-c("Jednostajny","Normalny", "Dwupunktowy")
+
+print(xtable(res, caption = "Zgodność funkcji autocorelcji z rozkładem normalnym dla h=n/4.", floating = FALSE), comment=FALSE, caption.placement="top")
+
+```
+
+
+```{r, results='asis', message=FALSE, warning=FALSE, echo=FALSE}
+# parametry analizy
+K<- 100  # liczba realizacji
+ile.powtorz <- 1000 # powtórzeń
+roz=c(uni,nor,bin) # rozpatrywane rozkłady
+
+res=array(dim=c(3,4))
+
+i=0
+for(dis in roz){
+  i=i+1
+  for(j in 1:4){
+    wynik.ks <- numeric(ile.powtorz)
+    wynik.sw <- numeric(ile.powtorz)
+    for(m in 1:ile.powtorz){
+        realizacje <- matrix(dis(N[j]*K),N[j],K)
+        srednie    <- apply(realizacje, 2, COR, h=floor(N[j]/2))
+        
+        wynik.ks[m] <- ks.test(srednie,"pnorm", mean=0, sd=1/sqrt(N[j]))$p.value>0.05
+    }
+    res[i,j]=sum(wynik.ks)/ile.powtorz
+  }
+}
+
+colnames(res)<-c("n=20","n=50", "n=100","n=1000")
+row.names(res)<-c("Jednostajny","Normalny", "Dwupunktowy")
+
+print(xtable(res, caption = "Zgodność funkcji autocorelcji z rozkładem normalnym dla h=n/2.", floating = FALSE), comment=FALSE, caption.placement="top")
+
+```
+
+Również tu możemy wyciągnąć te same wnioski jakie dla funckji autocovariancji. Dla małych opóźnień $h$ względem $n\geq 100$ wygenerowane dane przypominają rozkład normalny z parametrami średniej $\mu=0$ oraz odchylenia standardowego $\sigma=1/\sqrt n$. Natomiast dla $h=n/2$ i nawet dużej próby $n=1000$ pojawiają się poważne odstępstwa od rozkładu asymptotycznego
+
+
+# Testowanie Białoszumowości
+## Test graficzny
+Do zaimplementowania "graficznego" testu białoszumowości korzystam z informacji z wykłądu, czyli
+\begin{itemize}
+  \item Co najmnie $95\%$ z rozpatrywanych czasów późnienia funkcji autokowariacji powinna się znajdować w przedziale $\pm1.96/\sqrt n$.
+  \item Obserwacje wystające poza przedział nie powinny przekraczać wartości $\pm2.94/\sqrt n$, czyli nie powinny wykraczać znacząco za zadany przedział. Wartość tą wybraliśmy na podstawie zasady 3 sigm.
+\end{itemize}
+W testach będziemy rozpatrywać maksymalne opóźnienie $h_{max}=\left[n/4\right]$, czyli część całkowitą z wartości $n/4$.
+
+```{r, results='asis', message=FALSE, warning=FALSE}
+test<-function(X){
+  n=length(X)
+  h=floor(n/4)
+  af=abs(acf(X,lag=h,plot=FALSE)$acf[-1])
+  if(sum(af>1.96/sqrt(n))/h > 0.05) return(0)#(c(0,sum(af<1.96/sqrt(n))/h))
+  if(max(af)>2.94/sqrt(n)) return(0)
+  return(1)
+}
+
+```
+
+
+
+```{r, results='hide', message=FALSE, warning=FALSE, echo=TRUE}
+
+set.seed(3141562)
+sum(apply(matrix(runif(20*1000),nrow=1000), MARGIN = 1,test))/1000
+sum(apply(matrix(rnorm(20*1000),nrow=1000), MARGIN = 1,test))/1000
+
+X=matrix(runif(21*1000),nrow=1000, ncol = 21)
+Y=X[,-21]-pi*X[,-1]
+sum(apply(Y, MARGIN = 2,test))/1000
+
+
+```
+Test ten sprawdziliśmy początkowo dla ciągów typu właśnie białego szumu o długości 20 i rozkładzie jednostajnym lub normalnym  standardowym. Symulacjie powtórzyliśmy 1000 razy dla każdego rozkładu. W wyniku otrzymaliśmy, że szereg został uznany za biały szum jedynie odpowiednio $87.2\%$ oraz $89.2\%$. Sprawdziliśmy jeszcze jak ocenia on szeregi MA(1) postaci
+\begin{equation}
+  X_t=Z_t-aZ_{t-1},
+\end{equation}
+gdzie $Z_t$ jest białym szumem z rozkładu jednostajnego standardowego. Wybraliśmy parametr $a=\pi$. W wyniku 1000 symulacji szereg został zakfalifikowany jako biały szum jedynie $1.7\%$ razy. Widać, że metoda graficzna ma skłonność do klasyfikacji szeregów jako nie białyszum
+
+## Fromalny Test białegoszumu
+W przeciwieństwie do testów graficznych, których zasady działania często opierają się na często złudnej intuicji, stoją testy fromalne. W naszym przypadku skorzystamy z dwóch testów: Testu Boxa–Pierce'a (BP) oraz Testu Ljungi–Boxa (LB). Poniżej napisaliśmy odpowienio funkcjie:
+
+```{r, results='asis', message=FALSE, warning=FALSE, echo=TRUE}
+bp<-function(X,h=0,a=0.05){
+  if(h==0) h=floor(length(X)/4)
+  n=length(X)
+  rho=acf(X,lag.max=h,plot=FALSE)$acf[2:(h+1)]
+  a<1-pchisq(n*sum(rho^2),h)
+}
+
+lb<-function(X,h=0,a=0.05){
+  if(h==0) h=floor(length(X)/4)
+  rho=acf(X,lag.max=h,plot=FALSE)$acf[2:(h+1)]
+  n=length(X)
+  Q=0
+  for(i in 1:h){
+    Q=Q+rho[i]^2/(n-i)
+  }
+  Q=Q*n*(n+2)
+  a<1-pchisq(Q,h)
+  
+}
+```
+
+
+```{r, results='hide', message=FALSE, warning=FALSE, echo=FALSE}
+set.seed(3141592)
+X=matrix(rnorm(51*1000),nrow=1000, ncol = 51)
+Y=X[,-51]-X[,-1]
+
+sum(apply(Y, MARGIN = 1,bp))/1000
+sum(apply(Y, MARGIN = 1,lb))/1000
+
+sum(apply(matrix(runif(20*1000),nrow=1000), MARGIN = 1,bp))/1000
+sum(apply(matrix(rnorm(20*1000),nrow=1000), MARGIN = 1,bp))/1000
+
+sum(apply(matrix(runif(20*1000),nrow=1000), MARGIN = 1,lb))/1000
+sum(apply(matrix(rnorm(20*1000),nrow=1000), MARGIN = 1,lb))/1000
+```
+Każdą z funkcji przetestowaliśmy poprzez sprawdzenie jak często testy świadczą o białoszumowości z pewnością na poziome $\alpha=0.05$, na podstawie 1000 symulacji MC dla każdego z rozpatrywanych rozkładów. Dla zmiennej z rozkładu MA(1), zdefiniowanej wcześniej testy BP i LB uzyskoały kolejno częśtość na poziome $32.2\%$ oraz $30\%$, więc dla mniejszych rozmiarów $n=20$, testy mają jeszcze małą skuteczność. Sprawdzić powinniśmy jeszcze jak się zachowują wobec prawdziwego białego szumu. Sprawdziliśmy to dla rozkładu jednstajengo standardowego i normalnego sdandardowego. Test BP w $96.7\%$ oraz $97.6\%$ poprawnie świadczył o białoszumowości, natomiast test LB osiągną wynik na poziome $92.4\%$ oraz $93.7\%$.
+
+## Porównanie metod
+```{r, results='asis', message=FALSE, warning=FALSE, echo=FALSE}
+N=c(20,50,100,150)
+
+res=array(dim = c(3,4,4))
+
+for(i in 1:4){
+  X=matrix(runif(N[i]*1000),nrow=1000)
+  res[1,i,1]=sum(apply(X,MARGIN=1,FUN=test))/1000
+  res[2,i,1]=sum(apply(X,MARGIN=1,FUN=bp))/1000
+  res[3,i,1]=sum(apply(X,MARGIN=1,FUN=lb))/1000
+  
+  X=matrix(rnorm(N[i]*1000),nrow=1000)
+  res[1,i,2]=sum(apply(X,MARGIN=1,FUN=test))/1000
+  res[2,i,2]=sum(apply(X,MARGIN=1,FUN=bp))/1000
+  res[3,i,2]=sum(apply(X,MARGIN=1,FUN=lb))/1000
+  
+  Y=matrix(rnorm((N[i]+1)*1000),nrow=1000, ncol=N[i]+1)
+  X=Y[,-(N[i]+1)]-pi*Y[,-1]
+  res[1,i,3]=sum(apply(X,MARGIN=1,FUN=test))/1000
+  res[2,i,3]=sum(apply(X,MARGIN=1,FUN=bp))/1000
+  res[3,i,3]=sum(apply(X,MARGIN=1,FUN=lb))/1000
+  
+  Y=matrix(rnorm((N[i]+1)*1000),nrow=1000, ncol=N[i]+1)
+  X=apply(Y,MARGIN = 1, cumsum)
+  res[1,i,4]=sum(apply(X,MARGIN=1,FUN=test))/1000
+  res[2,i,4]=sum(apply(X,MARGIN=1,FUN=bp))/1000
+  res[3,i,4]=sum(apply(X,MARGIN=1,FUN=lb))/1000
+  
+}
+
+nam<-c("graficznego.", "BP.", "LB.")
+
+for(i in 1:3){
+  temp=t(res[i,,])
+  colnames(temp)<-c("n=20","n=50","n=100","n=150")
+  rownames(temp)<-c("Jednostajny", "Normalny", "MA(1)", "Spacer losowy")
+  print(xtable(temp, caption = paste("Częstość przyjmowania hipotezy o białoszumowości dla testu ",nam[i]),  floating = FALSE), comment=FALSE, caption.placement="top")
+}
+
+
+```
+
+
+Z tablic można zauważyć, że test BP częściej świadczy o białoszumowości niż test LB, niezależnie od stanu prawdziwego. Test graficzny znacząco zaniża częstość, świadcząc o braku białego szumu. Wszystekie metody bardzo dobrze sobie radzą z identyfikowaniem spaceru losowego, natomiast mają problemy z szeregiem tymu MA(1). Dla dużych $n=150$ wartości oba testy formalne rodzą sobie z identyfikowaniem białego szumu innego, w przypadku jeżeli nie jest to model MA. Dla większych wartości, bliskich $n=1000$ oba testy radzą sobie również z tym modelem
+

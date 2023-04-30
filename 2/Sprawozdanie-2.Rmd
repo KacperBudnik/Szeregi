@@ -1,0 +1,65 @@
+---
+title:  'Analiza szeregów czasowych'
+subtitle: 'Sprawozdanie 2'
+author:
+  - Kacper Budnik
+date: "2023-03-31"
+output:
+  pdf_document:
+    toc: true
+    number_sections: true
+    extra_dependencies:
+    - float
+    - hyperref
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(knitr)
+library(xtable)
+library(dplyr)
+library(scales)
+library(ggplot2)
+library(moments)
+library(GGally)
+opts_chunk$set(fig.path='figure/', fig.align='center', fig.pos='H',fig.width=6, fig.height=4)
+
+```
+
+
+# Wstęp
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

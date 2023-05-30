@@ -47,7 +47,6 @@ library(quantmod)
 
 
 \newpage
-<!--
 \section{Dekompozycja szeregów czasowych -- eliminacja trendu i sezonowości.}
 \subsection{Wprowadzenie i analiza graficzna.}
 W pierwszej części sprawozdania zajmiemy się dekompozycją szeregu czasowego, w celu eliminacji sezonowości i trendu, oraz porównamy różne jej metody. W tym celu wykorzystaliśmy zbiór danych \verb|energia| (w postaci zmiennej typu \verb|ts|) z pakietu \verb|TSAFBook|, zawierający dane odnoście miesięcznej produkcji energii elektrycznej w Polsce. Dodatkowo, wszystkie wykowywane testy były na poziomie ufności $\alpha=0.05$. Dane pochodzą z okresu styczeń 2008 - sierpień 2014. Na wykresie prezentują się następująco.
@@ -381,8 +380,6 @@ Możemy zauważyć znaczące wychylenie od zera dla opóźnienia $h=14$, wskazuj
 \subsection{Podsumowanie}
 Spośród rozpatrywanych metod dekompozycji najlepiej poradziły sobie związane z funkcjami \verb|decompose| oraz \verb|stl|. Jednak metoda drug, związana z funkcją \verb|tslm| próbowała dopasować wzór analityczny do trendu. Na podstawie tej metody pokazaliśmy, że transformacja Boxa-Coxa może poprawić nasze dane -- pozwoliła otrzymać szereg reszt, który przeszedł test na stacjonarność (ADF test) dla opóźnienia $h=1$. Rozpatrzyliśmy jeszcze dane po zróżnicowaniu sezonowym oraz z różnymi opóźnieniami. Wyniki okazały się mniej zadowalające niż otrzymane pozostałymi metodami, ale jest to metoda najprostsza w implementacji oraz najmniej zmieniająca dane podczas transformacji (nie rozdziela je osobna na trend, sezonowość itp.). 
 
--->
-}
 \section{Zastosowanie wskaźników analizy technicznej w analizie szeregów czasowych.}
 W celu analizy rozpatrujemy akcje firmy KGHM Polska Miedź z okresu od 30 kwietnia 2020 do dania pisania tego raportu tj. 30 kwiecień 2023 roku. Dane prezentują się następująco.
 ```{r}
@@ -404,19 +401,13 @@ kghm=kghm[!sapply(Cl(kghm), is.na)]
 ```
 Możemy teraz przystąpić do analizy technicznej. Na poniższym wykresie zamieściliśmy wszystkie wyniki dla podstawowych parametrów (według zaimplementowanych algorytmów). 
 ```{r, fig.height=7, results="hide"}
-#candleChart(copper, TA=c(addBBands(), addMACD(),addSMI()))#, subset = '2018-01::')
-chartSeries(kghm, TA=c(addBBands(), addMACD(),addSMI(), addADX()), type="auto")#, subset = '2018-01::')
+#candleChart(copper, TA=c(addBBands(), addMACD(),addSMI(), addADX()))#, subset = '2018-01::')
+chartSeries(kghm, TA=c(addBBands(), addMACD(),addSMI()), type="auto")#, subset = '2018-01::')
 
 
 
 ```
-Na wykresie zamieszczone zostały wskaźniki takie jak: wstęga Bolingera, MACD, SMI oraz ADX.
-
-
-
-
-
-
+Na wykresie zamieszczone zostały wskaźniki takie jak:
 \begin{itemize}
   \item Wstęga bolingera --  dwie czerwone i przerywane linie nałożone na pierwszy wykres. Jeśli cena spadnie poniżej dolnej linii jest to sygnał do kupna, jeśli przednie górną, to otrzymujemy sygnał do sprzedaży. Podczas analizy rozważymy zmianę dwóch parametrów w funkcji
   \begin{itemize}
@@ -426,7 +417,9 @@ Na wykresie zamieszczone zostały wskaźniki takie jak: wstęga Bolingera, MACD,
   \item MACD -- Moving Avrage Convergence Diverfence -- jest to wskaźnik dynamiki trendów, który pokazuje związek pomiędzy dwiema średnimi kroczącymi. Sygnał kupna jest generowany, gdy linia MACD przetnie linię sygnalną od dołu, a sygnał sprzedaży generowany jest wtedy, kiedy linia MACD przetnie linię sygnalną od góry.
   \item SMI -- Stochastic Momentum Index -- oblicza odległość między aktualną ceną zamknięcia w stosunku do miediany górnego/dolnego przedziału cenowego. Podczas analizy rozpatrzymy zmienianie parametru $n$ odpowiedzialnego za długość rozważanego okresu.
 \end{itemize}
-<!--
+
+Możemy teraz spojrzeć na ich interpretację. W naszych danych mamy duże okresy bardzo gwałtownych zmian, co jest do przewidzenia, zważając, że jest to okres pandemii. Dlatego wstęga Bollingera słabo nadaje się w tym przypadku. Każe sprzedawać, podczas gdy cena będzie dalej rosła, a kupować gdy cena ciągle spada. Oczywiście zdarzają się momenty, gdy wstęga dobrze nam doradziła, przykładowo w marcu 2021 roku. Podobnie jest z kolejnymi metodami. W wielu przypadkach źle oceniły sytuację. Jeżeli jednak ograniczymy się jedynie do ostatnich miesięcy, możemy zauważyć, że metoda MACD na przełomie stycznia i lutego nakazała nam sprzedaż, co rzeczywiście się nam opłacało w tym okresie. Podobnie z resztą metoda SMI.
+
 
 \subsubsection{Wstęga Bolingera}
  Porównajmy Wstęgę Bolingera na poniższych animacjach.
@@ -459,16 +452,18 @@ ani.options(oopt)
 
 ```
 Możemy zauważyć, że wraz ze wzrostem parametry $n$ zwiększa się wielkość wstęgi (odległość między obiema liniami), ale również przesuwa się delikatnie w prawo oraz staje się bardziej wygładzona. Natomiast zmiana parametru $sd$ w głównej mierze zwiększa wielkość wstęgi.
--->
-\subsubsection{MDA}
+
+\subsubsection{MACD}
+Rozpatrzymy teraz jak zachowa się funkcja \verb|MACD| w przypadku zmiany jej parametrów.
 ```{r anim_MACD_slow, fig.cap="MACD dla różnych wartości parametrów.",fig.show="animate", fig.width=6, fig.height=4}
 
 slow.win=c(13,15,18,23,26,30,40)
 fast.win=c(2,3,5,8,13,21,25)
 for (i in 1:length(slow.win)) 
 {
-  autoplot(MACD(Cl(kghm)),maType="EMA",nSlow=slow.win[i])
-
+  
+  p<-autoplot(MACD(Cl(kghm),nSlow=slow.win[i])) + xlab(paste0("Wykres dla nSlow=",slow.win[i]))
+  plot(p)
   ani.pause()
 }
 
@@ -482,12 +477,43 @@ slow.win=c(13,15,18,23,26,30,40)
 fast.win=c(2,3,5,8,13,21,25)
 for (i in 1:length(fast.win)) 
 {
-  autoplot(MACD(Cl(kghm)),maType="EMA",nFast=fast.win[i])
-
+  p<-autoplot(MACD(Cl(kghm),nFast=fast.win[i])) + xlab(paste0("Wykres dla nFast=",fast.win[i]))
+  plot(p)
   ani.pause()
 }
 
 ani.options(oopt) 
 
 ```
+
+Jak widzimy, podobnie jak w przypadku wstęgi Bollingera i parametru $n$, parametry $nSlow$ i $nFast$ zwiększają wygładzenia krzywych. Jednak można zauważyć, że zwiększając wartość parametru $nSlow$ zwiększamy maksymalne wartości funkcji macd oraz signal. Natomiast dla większych parametrów $nFast$ działanie jest odwrotne, wraz z zwiększeniem parametru maleją wartości obu funkcji.
+
+
+\subsubsection{SMI}
+Ostatnią rozpatrywaną funkcją będzie \verb|SMI|. Wyniki prezentują się następująco
+```{r anim_SMI, fig.cap="SMI dla różnych wartości parametrów.",fig.show="animate", fig.width=6, fig.height=4}
+
+n.win=c(2,3,5,8,13,21,34)
+for (i in 1:length(n.win)) 
+{
+  p<-autoplot(SMI(Cl(kghm),n=n.win[i])) + xlab(paste0("Wykres dla n=",n.win[i]))
+  plot(p)
+  ani.pause()
+}
+
+ani.options(oopt) 
+
+```
+Również w tym przypadku widzimy, że zmiana parametru $n$ zwiększa wygładzenie funkcji oraz zwiększenie wartości obu funkcji, analogicznie jak działo się w przypadku parametru $nSlow$. 
+
+
+
+
+
+
+
+
+
+
+
 

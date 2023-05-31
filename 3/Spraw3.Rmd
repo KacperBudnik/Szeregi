@@ -24,28 +24,294 @@ library(dplyr)
 library(tidyr)
 library(vcd)
 library(knitr)
-#library(TSAFBook)
+library(TSAFBook)
 library(astsa)
 library(forecast)
+library(gridExtra)
+library(DescTools)
+library(tseries)
 ```
 
 ```{r, echo=FALSE}
 month.name=c("Styczeń", "Luty", "Marzec", "Kwiecień", "Maj", "Czerwiec", "Lipiec", "Sierpień", "Wrzesień", "Październik", "Listopad", "Grudzień")
 ```
 \newpage
-\section{Dopasowanie modeli autoregresji do szeregu \verb|globtemp|.}
+\section{Dopasowanie modeli autoregresji do szeregu globtemp.}
 \subsection{Cel i dane.}
 Rozpatrywane dane -- \verb|globtemp| -- pochodzących z pakietu \verb|astsa|. Przedstawiają one odchylenia średniej rocznej temperatury od temperatury średniej globalnej w latach 1951-1980. Pierwszy pomiar pochodzi z<!-- `r month.name[start(globtemp)[2]]`--> roku `r start(globtemp)[1]`, natomiast ostatni z  `r end(globtemp)[1]`. Celem pierwszej części sprawozdania będzie przeprowadzenie kompletnej analizy związaniem z dopasowaniem i diagnostyką modeli autoregresji (AR).
 \subsection{Weryfikowanie stacjonarności danych.}
 Przed przystąpieniem do analizy, sprawdźmy, czy rozpatrywany szereg jest stacjonarny. Zacznijmy od przyjrzenia się danym na wykresie.
-```{r, fig.cap="Wykres dla danych podstawowych."}
-autoplot(globtemp)
-X=globtemp
-par(mfrow=c(2,1), mar=c(4,4,0,0))
-plot(acf(X))
-plot(globtemp)
+```{r, fig.cap="Wykresy danych podstawowych oraz ich funkcje autokorelacji i częściowej autokorelacji.",fig.width=6, fig.height=7}
+#X=globtemp
+#par(mfrow=c(2,1), mar=c(4,4,1,1))
+#plot(X)
+#plot(acf(X, plot=F), main = "")
+PlotACF(globtemp, main="")
 ```
-Jak możemy zauważyć, widoczny jest silny trend, zatem rozpatrywany szereg nie jest szeregiem stacjonarnym. Dlatego w dalszej części zadania rozpatrywaliśmy zróżnicowane dane z krokiem 1, gdyż nie zauważyliśmy żadnych zachowań sezonowych.
+Jak możemy zauważyć, widoczny jest silny trend, w dodatku funkcja autokorelacji zanika powoli, zatem rozpatrywany szereg nie jest szeregiem stacjonarnym. Dlatego w dalszej części zadania rozpatrywaliśmy zróżnicowane dane z krokiem 1, gdyż nie zauważyliśmy żadnych zachowań sezonowych. Dla tych danych wykresy analogiczne jak wcześniej prezentują się następująco.
+```{r, fig.cap="Wykresy danych po różnicowaniu oraz ich funkcje autokorelacji i częściowej autokorelacji.",fig.width=6, fig.height=7}
+X=diff(globtemp, differences = 1)
+#plt1<-autoplot(X) + ylab("")
+#plt2<-ggAcf(X) + ggtitle("")
+#grid.arrange(plt1,plt2,ncol=2)
+PlotACF(X, main="")
+tmp<-sapply(1:13, function(h) adf.test(X, k=h)$p.val)
+```
+Po zróżnicowaniu nie zauważyliśmy trendu oraz funkcje autokorelacji jak i częściowej autokorelacji szybko zanikają od 0. Dlatego możemy podejrzewać, że mamy już do czynienia z szeregiem stacjonarnym. Dodatkowo test ADF (Augmented Dickey-Fuller test) zwrócił p-value na poziomie `r adf.test(X)$p.val`<0.05 (dla opóźnienia `r adf.test(X)$parameter`, dla innych podobnie), zatem mamy podstawy do odrzucenia hipotezy o niestacjonarności zróżnicowanych danych. Dodatkowo nie widać żadnych niejednolitości w wariancji, jednak możemy spróbować sprawdzić to przy użyciu formalnych testów. W tym celu skorzystaliśmy z testowania wstecznego. Podzieliliśmy dane na części i sprawdziliśmy czy wariancje w każdej części są takie same. W tym celu wykorzystaliśmy funkcję \verb|var.test|. W poniższej tabeli znajdują się p-wartości wykonanych testów dla podziału na 5 części.
+```{r, fig.cap="p-wartość testów na zgodność wariancji. Numer kolumny i wiersza oznacza które części porównywaliśmy ze sobą."}
+k=5
+tmp=split(X, 1:k)
+int=floor(length(X)/k)
+mat=matrix(nrow=k,ncol=k)
+mat[lower.tri(mat)]<-sapply(
+  tmp,FUN=function(x) sapply(
+    tmp, FUN=function(y) var.test(x,y)$p.val
+    )
+  )[lower.tri(mat)]
+mat[upper.tri(mat, diag = TRUE)]<-sapply(
+  1:k, FUN=function(x) sapply(
+    1:k, FUN=function(y) var.test(X[((x-1)*int+1):(x*int)],X[((y-1)*int+1):(y*int)])$p.val
+    )
+  )[upper.tri(mat, diag = TRUE)]
+row.names(mat)<-1:k
+colnames(mat)<-1:k
+mat=cbind(1:k,mat)
+kable(round(mat, digits = 4))
+```
+W komórkach nad diagonalą znajdują się wyniki przy podziale próby na części zawierające kolejne obserwacje. W dolnej części podział nastąpił przy pomocy funkcji \verb|split| (w każdej części należała co `r k` obserwacja). W każdym przypadku wartość była większa od standardowego progu $\alpha=0.05$ zatem nie mamy podstaw do odrzucenia hipotezy o homoskedastyczności. Jednak warto mieć na uwadze], że w czwartym okresie wyniki są znacznie niższe niż w pozostałych.
+\subsection{Wybór modelu AR}
+Patrząc na drugi wykres, a dokładnie na funkcję PACF dla zróżnicowanych danych, możemy postulować, że odpowiednim modelem dla danych będzie AR(3), model autoregresji rzędu 3. Jednak by nie opierać się jedynie na metodach graficznych skorzystamy z kryteriów AIC oraz FPE. Implementacja jego wygląda następująco.
+```{r, echo=T}
+FPE<-function(p) arima(X,order=c(p,0,0))$sigma2*(length(X)+p)/(length(X)-p)
+```
+Porównajmy na wykresach powyższe kryterium z kryterium Akkaike (AIC).
+```{r,  fig.cap="Wartości kryteriów informacyjnych dla danego rzędu modelu."}
+
+p.max=10
+par(mfrow=c(1,2), mar=c(2,2,1,0))
+plot(0:p.max,sapply(0:p.max, FUN=function(p) arima(X,order=c(p,0,0))$aic), xlab = "", ylab="", main="AIC")
+plot(0:p.max, sapply(0:p.max, FUN=FPE), xlab = "", ylab="", main="FPE")
+
+```
+Możemy zauważyć, że najmniejszą wartość oba kryteria przyjmują dla $p=3$, czyli dla tego samego rzędu modelu, który wybraliśmy interpretując funkcję PACF. Jednak możemy zobaczyć, że wartość kryteriów w tym punkcie jest zbliżona do wartości dla rzędu $p=5$. Jeśli ponownie spojrzelibyśmy na wykres PACF zauważylibyśmy, że dla tego opóźnienia słupek częściowej autokorelacji jest niewiele niższy niż niebieskie linie, zatem przy pomocy każdej z tych trzech metod otrzymaliśmy podobne wyniki. 
+\subsection{Wyznaczenie parametrów modelu AR.}
+W poprzednim krok wyznaczyliśmy rząd modelu $p=3$. Jednak ponieważ wyniki (kryteria) zwracały niewiele większe wyniki dla rzędu $p=5$ rozpatrywaliśmy oba przypadki. Do estymacji parametrów modelu posłużyliśmy się funkcją \verb|ar| z pakiety \verb|stats|, przy użyciu dwóch metod. Pierwszą metodą była metoda yule-walker'a, natomiast drugą była metoda największej wiarygodności. Wyniki przedstawiliśmy w poniższych tabelach.
+```{r}
+p=3
+tmp=rbind(ar(X, aic = F, order.max = p, method = "yw")$ar,
+          ar(X, aic = F, order.max = p, method = "mle")$ar,
+          ar(X, aic = F, order.max = p, method = "burg")$ar,
+          ar(X, aic = F, order.max = p, method = "ols")$ar)
+rownames(tmp)<-c("Yule-Walker", "MLE", "Burg", "OLS")
+kable(tmp, caption = paste0("Wyestymowane parametry dla modelu AR(",p,")."))
+```
+```{r}
+p=5
+tmp=rbind(ar(X, aic = F, order.max = p, method = "yw")$ar,
+          ar(X, aic = F, order.max = p, method = "mle")$ar,
+          ar(X, aic = F, order.max = p, method = "burg")$ar,
+          ar(X, aic = F, order.max = p, method = "ols")$ar)
+rownames(tmp)<-c("Yule-Walker", "MLE", "Burg", "OLS")
+kable(tmp, caption = paste0("Wyestymowane parametry dla modelu AR(",p,")."))
+```
+Możemy zauważyć, że metoda Yule-walker'a dała najmniejsze (co do modułu) estymatory dla pierwszych trzech wartości, niezależnie od wielkości modelu. Jednak estymatory różnią się od siebie co najwyżej na drugim miejscu po przecinku, a w wielu przypadkach różnica jest jeszcze mniejsza. Natomiast jedynie estymator Burg'a zwraca wartości, które dla współczynnika ar4 są statystycznie nie istotne, na poziomu istotności $\alpha=0.05$.
+```{r, results='hide'}
+diag(ar(X, aic = F, order.max = p, method = "yw")$asy.var.coef)
+diag(ar(X, aic = F, order.max = p, method = "mle")$asy.var.coef)
+
+a=0.05
+
+p=3
+abs(ar(X, aic = F, order.max = p, method = "yw")$ar)<qnorm(1-a)*diag(ar(X, aic = F, order.max = p, method = "yw")$asy.var.coef)/sqrt(length(X))
+abs(ar(X, aic = F, order.max = p, method = "mle")$ar)<qnorm(1-a)*diag(ar(X, aic = F, order.max = p, method = "mle")$asy.var.coef)/sqrt(length(X))
+abs(ar(X, aic = F, order.max = p, method = "burg")$ar)<qnorm(1-a)*diag(ar(X, aic = F, order.max = p, method = "burg")$asy.var.coef)/sqrt(length(X))
+
+p=5
+abs(ar(X, aic = F, order.max = p, method = "yw")$ar)<qnorm(1-a)*diag(ar(X, aic = F, order.max = p, method = "yw")$asy.var.coef)/sqrt(length(X))
+abs(ar(X, aic = F, order.max = p, method = "mle")$ar)<qnorm(1-a)*diag(ar(X, aic = F, order.max = p, method = "mle")$asy.var.coef)/sqrt(length(X))
+abs(ar(X, aic = F, order.max = p, method = "burg")$ar)<qnorm(1-a)*diag(ar(X, aic = F, order.max = p, method = "burg")$asy.var.coef)/sqrt(length(X))
+
+
+ar(X, aic = F, order.max = p, method = "mle")$ar
+diag(ar(X, aic = F, order.max = p, method = "mle")$asy.var.coef)
+qnorm(0.95)*diag(ar(X, aic = F, order.max = p, method = "mle")$asy.var.coef)/sqrt(length(X))
+```
+
+
+\subsection{Test białoszumowości dla reszt.}
+Możemy jeszcze sprawdzić dopasowanie modelu poprzez testowanie białoszumowości reszt. Podobnie jak w pierwszym sprawozdaniu, wykorzystaliśmy w tym celu test graficzny oraz formalne testy: Box-Pierce i Ljung-Box. P wartośc uzyskaną przy wykorzystaniu testów formalnych zamieszczono w poniższych tabelach.
+```{r}
+p=3
+tmp<-
+  sapply(c("Box-Pierce","Ljung-Box"), FUN=function(typ) 
+    sapply(c("yule-walker", "burg", "ols", "mle"), FUN=function(met) 
+      Box.test(ar(X,aic=F,order.max = p, method = met)$resid, type=typ)$p.val)) %>% t()
+colnames(tmp)<-c("Yule-Walker", "MLE", "Burg", "OLS")
+kable(tmp, caption = paste0("Testy białoszumowości dla modelu AR(",p,")."))
+```
+```{r}
+p=5
+tmp<-
+  sapply(c("Box-Pierce","Ljung-Box"), FUN=function(typ) 
+    sapply(c("yule-walker", "burg", "ols", "mle"), FUN=function(met) 
+      Box.test(ar(X,aic=F,order.max = p, method = met)$resid, type=typ)$p.val)) %>% t()
+colnames(tmp)<-c("Yule-Walker", "MLE", "Burg", "OLS")
+kable(tmp, caption = paste0("Testy białoszumowości dla modelu AR(",p,")."))
+```
+W każdym przypadku zwrócono wartość przewyższającą standardowy próg ufności, na poziomie $\alpha=0.05$, zatem nie mamy podstaw do odrzucenia hipotezy o niezależności reszt. Dodatkowo wykonując test graficzny otrzymaliśmy poniższą tabelę.
+```{r}
+test_vialo<-function(X){
+  n=length(X)
+  h=floor(n/4)
+  af=abs(acf(X,lag=h,plot=FALSE)$acf[-1])
+  if(sum(af>1.96/sqrt(n))/h > 0.05) return(FALSE)#(c(0,sum(af<1.96/sqrt(n))/h))
+  if(max(af)>2.94/sqrt(n)) return(FALSE)
+  return(TRUE)
+}
+
+
+tmp<-
+  sapply(c(3,5), FUN=function(p) 
+    sapply(c("yule-walker", "burg", "ols", "mle"), FUN=function(met) 
+      ar(X,aic=F,order.max = p, method = met)$resid %>%
+        na.remove %>% test_vialo
+      )) %>% t
+
+
+
+colnames(tmp)<-c("Yule-Walker", "MLE", "Burg", "OLS")
+rownames(tmp)<-c("AR(3)","AR(5)")
+kable(tmp, caption = paste0("Graficzny testy białoszumowości."))
+
+```
+W tabeli wartość \verb|TRUE| oznacza, że próbka przeszła test białoszumowości, więc ponownie nie mamy podstaw do odrzucenia hipotezy o białoszumowości.
+
+Możemy jeszcze sprawdzić, czy reszty mają rozkład normalny. Zacznijmy od testu graficznego. Reszty dla modelu AR(3) wyestymowanego przy pomocy motody Yule-Walker'a porównaliśmy z rozkładem normalnym na wykresie kwantylowym. 
+```{r, fig.cap="Reszty modelu AR(3) (dla metody YW)."}
+qqnorm(ar(X,aic=F,order.max = 3)$resid)
+
+```
+Widzimy, że nasze dane dobrze przybliżają linię prostą. Możemy przyjrzeć się jeszcze testom formalnym.
+```{r}
+tmp<-
+  sapply(c(3,5), FUN=function(p) 
+    sapply(c("yule-walker", "burg", "ols", "mle"), FUN=function(met) 
+      shapiro.test(na.remove(ar(X,aic=F,order.max = p, method = met)$resid))$p
+      )) %>% t
+
+colnames(tmp)<-c("Yule-Walker", "MLE", "Burg", "OLS")
+rownames(tmp)<-c("AR(3)","AR(5)")
+kable(tmp, caption = "p wartości testu Shapiro Wilka dla różnych modeli.")
+```
+Tutaj analogicznie do metody graficznej, nie mamy podstaw do odrzucenia hipotezy o normalności reszt.
+\subsection{Predykcja}
+
+
+
+```{r}
+#autoplot(diffinv(forecast(ar(X,aic=F,order.max = 3)),xi=globtemp[1]))
+
+autoplot(forecast(ar(X,aic=F,order.max = 3)))
+
+```
+```{r}
+tmp<-predict(ar(X, aic=F, order.max = 3), n.ahead = 10)$pred %>% diffinv(xi=globtemp[length(globtemp)])
+plot(globtemp)
+lines(tmp, col="red", lwd=2)
+
+autoplot(cbind(globtemp,tmp))
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+\section{Dopasowanie modeli ARMA dla wybranych danych rzeczywistych.}
+W drugim zadaniu postaramy się dopasować model \verb|ARMA| do danych rzeczywistych. Z powodu zalania serwerów Politechniki Wrocławskiej, skutkującym brakiem dostępu do listy możliwych danych, skorzystaliśmy z danych rozpatrywanych w poprzednim sprawozdaniu (z nadzieją, że były one dozwolone). Rozpatrywanymi danymi są dane odnośnie miesięcznej produkcji energii elektrycznej w Polsce. Pochodzą one z pakietu \verb|TSAFBook|. Na wykresie prezentują się następująco
+```{r, fig.cap="Przedstawienie analizowanych danych na wykresie."}
+autoplot(energia)
+```
+
+
+```{r, fig.cap="Przedstawienie analizowanych danych na wykresie."}
+autoplot(energia)
+autoplot(forecast::BoxCox(energia, lambda = "auto"))
+autoplot(forecast::BoxCox(energia, lambda = 0))
+
+```
+
+
+```{r, fig.height=7}
+
+
+X=diff(energia,lag=12)
+autoplot(X)
+
+X=diff(diff(energia,lag=12, differences = 1), differences = 1)
+PlotACF(X, main="")
+X=diff(diff(energia,lag=12, differences = 2), differences = 1)
+PlotACF(X, main="")
+X=diff(diff(diff(energia,lag=12, differences = 1), differences = 1), lag=14)
+PlotACF(X, main="")
+
+auto.arima(X)
+
+tmp1<-auto.arima(X)
+tmp2<-auto.arima(energia)
+
+tmp3<-auto.arima(diff(diff(energia,lag=12)))
+
+sapply(1:14,FUN=function(h) Box.test(tmp1$residuals, lag = h)$p.val)
+sapply(1:14,FUN=function(h) Box.test(tmp2$residuals, lag = h)$p.val)
+sapply(1:14,FUN=function(h) Box.test(tmp3$residuals, lag = h)$p.val)
+
+shapiro.test(tmp1$residuals)$p
+shapiro.test(tmp2$residuals)$p
+shapiro.test(tmp3$residuals)$p
+
+
+X=forecast::BoxCox(diff(diff(energia,lag=12), differences = 1), lambda="auto")
+PlotACF(X, main="")
+
+```
+
+
+
+
+
+
+
+
+
+```{r, fig.height=7}
+
+#X=BoxCox.lambda(diff(diff(energia,lag=12)))
+#PlotACF(X, main="")
+
+
+#shapiro.test(tmp3$residuals)$p
+
+
+#X=forecast::BoxCox(diff(diff(energia,lag=12), differences = 1), lambda="auto")
+#PlotACF(X, main="")
+
+```
+
+
+
 
 
 

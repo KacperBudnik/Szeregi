@@ -30,6 +30,8 @@ library(forecast)
 library(gridExtra)
 library(DescTools)
 library(tseries)
+library(kableExtra)
+
 ```
 
 ```{r, echo=FALSE}
@@ -46,7 +48,7 @@ Przed przystąpieniem do analizy, sprawdźmy, czy rozpatrywany szereg jest stacj
 #par(mfrow=c(2,1), mar=c(4,4,1,1))
 #plot(X)
 #plot(acf(X, plot=F), main = "")
-PlotACF(globtemp, main="")
+ggtsdisplay(globtemp)
 ```
 Jak możemy zauważyć, widoczny jest silny trend, w dodatku funkcja autokorelacji zanika powoli, zatem rozpatrywany szereg nie jest szeregiem stacjonarnym. Dlatego w dalszej części zadania rozpatrywaliśmy zróżnicowane dane z krokiem 1, gdyż nie zauważyliśmy żadnych zachowań sezonowych. Dla tych danych wykresy analogiczne jak wcześniej prezentują się następująco.
 ```{r, fig.cap="Wykresy danych po różnicowaniu oraz ich funkcje autokorelacji i częściowej autokorelacji.",fig.width=6, fig.height=7}
@@ -54,7 +56,7 @@ X=diff(globtemp, differences = 1)
 #plt1<-autoplot(X) + ylab("")
 #plt2<-ggAcf(X) + ggtitle("")
 #grid.arrange(plt1,plt2,ncol=2)
-PlotACF(X, main="")
+ggtsdisplay(X)
 tmp<-sapply(1:13, function(h) adf.test(X, k=h)$p.val)
 ```
 Po zróżnicowaniu nie zauważyliśmy trendu oraz funkcje autokorelacji jak i częściowej autokorelacji szybko zanikają od 0. Dlatego możemy podejrzewać, że mamy już do czynienia z szeregiem stacjonarnym. Dodatkowo test ADF (Augmented Dickey-Fuller test) zwrócił p-value na poziomie `r adf.test(X)$p.val`<0.05 (dla opóźnienia `r adf.test(X)$parameter`, dla innych podobnie), zatem mamy podstawy do odrzucenia hipotezy o niestacjonarności zróżnicowanych danych. Dodatkowo nie widać żadnych niejednolitości w wariancji, jednak możemy spróbować sprawdzić to przy użyciu formalnych testów. W tym celu skorzystaliśmy z testowania wstecznego. Podzieliliśmy dane na części i sprawdziliśmy czy wariancje w każdej części są takie same. W tym celu wykorzystaliśmy funkcję \verb|var.test|. W poniższej tabeli znajdują się p-wartości wykonanych testów dla podziału na 5 części.
@@ -205,138 +207,208 @@ kable(tmp, caption = "p wartości testu Shapiro Wilka dla różnych modeli.")
 ```
 Tutaj analogicznie do metody graficznej, nie mamy podstaw do odrzucenia hipotezy o normalności reszt.
 \subsection{Predykcja}
+Mając już dopasowany model do danych, możemy teraz spróbować przewidzieć zachowanie temperatury w przyszłości. W tym celu skorzystaliśmy z funkcji \verb|predict| z pakietu \verb|stats|. Wyniki prezentują się następująco.
 
-
-
-```{r}
-#autoplot(diffinv(forecast(ar(X,aic=F,order.max = 3)),xi=globtemp[1]))
-
-autoplot(forecast(ar(X,aic=F,order.max = 3)))
-
+```{r, fig.cap="Dane podstawowe z predykcją na 10 lat"}
+Forecast<-predict(ar(X, aic=F, order.max = 3), n.ahead = 10)$pred %>%
+  diffinv(xi=globtemp[length(globtemp)])
+autoplot(cbind(globtemp,Forecast)) + ylab("Temp")
 ```
-```{r}
-tmp<-predict(ar(X, aic=F, order.max = 3), n.ahead = 10)$pred %>% diffinv(xi=globtemp[length(globtemp)])
-plot(globtemp)
-lines(tmp, col="red", lwd=2)
+Możemy zauważyć, że według naszej prognozy, w najbliższych latach temperatura delikatnie spadnie, jednak w ciągu 10 lat będzie zachowywać trend dodatni i ostatecznie temepratura będzie wyższa niż w poprzednich okresach. Możemy zobaczyć jak będzie wyglądała predykcja na dłuższy okres.
 
-autoplot(cbind(globtemp,tmp))
+```{r, fig.cap="Dane podstawowe z predykcją na 50 lat"}
+Forecast<-predict(ar(X, aic=F, order.max = 3), n.ahead = 50)$pred %>%
+  diffinv(xi=globtemp[length(globtemp)])
+autoplot(cbind(globtemp,Forecast)) + ylab("Temp")
 ```
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+W tym przypadku prognoza będzie liniowa. Predykcja długoterminowa jest trudniejsza, więc powinna ona przybliżać jedynie trend. Jednak możemy zauważyć, że prognozowany trend jest mniej stromy niż był w ostatnich latach (np. 1980-2010).
 
 
 \section{Dopasowanie modeli ARMA dla wybranych danych rzeczywistych.}
-W drugim zadaniu postaramy się dopasować model \verb|ARMA| do danych rzeczywistych. Z powodu zalania serwerów Politechniki Wrocławskiej, skutkującym brakiem dostępu do listy możliwych danych, skorzystaliśmy z danych rozpatrywanych w poprzednim sprawozdaniu (z nadzieją, że były one dozwolone). Rozpatrywanymi danymi są dane odnośnie miesięcznej produkcji energii elektrycznej w Polsce. Pochodzą one z pakietu \verb|TSAFBook|. Na wykresie prezentują się następująco
+<!--W drugim zadaniu postaramy się dopasować model \verb|ARMA| do danych rzeczywistych. Z powodu zalania serwerów Politechniki Wrocławskiej, skutkującym brakiem dostępu do listy możliwych danych, skorzystaliśmy z danych rozpatrywanych w poprzednim sprawozdaniu (z nadzieją, że były one dozwolone). Rozpatrywanymi danymi są dane odnośnie miesięcznej produkcji energii elektrycznej w Polsce. Pochodzą one z pakietu \verb|TSAFBook|. Na wykresie prezentują się następująco-->
+
+W drugim zadaniu postaramy się dopasować model \verb|ARMA| do danych rzeczywistych. Skorzystaliśmy z danych rozpatrywanych w poprzednim sprawozdaniu, zawierających informacje odnośnie miesięcznej produkcji energii elektrycznej w Polsce. Pochodzą one z pakietu \verb|TSAFBook|. Na wykresie prezentują się następująco.
 ```{r, fig.cap="Przedstawienie analizowanych danych na wykresie."}
 autoplot(energia)
 ```
+W analizie porównaliśmy dwa podejście pozwalające na uwzględnienie występującego trendu długoterminowego oraz sezonowości: różnicowanie oraz dekompozycja na bazie modelu parametrycznego (skorzystaliśmy z funkcji \verb|tslm|). Dodatkowo przed różnicowaniem na dane nałożyliśmy transformacje Box'a-Cox'a dla parametru $\lambda=0$ (transformacja logarytmiczna). Wybór tej wartości parametru bazował na wiedzy empirycznej uzyskanej z innych kursów (przykładowo z "Rynków finansowych" i wiedzy o "częstych" własnościach logarytmicznych stóp zwrotu). Dla metody parametrycznej nałożyliśmy tą transformację z parametrem $\lambda=0.75$, gdzie wartość tego parametru wynika z rozważań z poprzedniego sprawozdania (dodatkowo jest to wartość uzyskana metodą największej wiarygodności przy użyciu funkcji \verb|BoxCox.lambda|).
+
+W przypadku różnicowania, wykorzystaliśmy jednokrotne różnicowanie sezonowe z opóźnieniem \verb|lag=12|, dodatkowo jest to rekomendowana liczba różnicowań według funkcji \verb|ndiffs| oraz \verb|nsdiffs|. Natomiast w metodzie parametrycznej rozpatrywaliśmy trend liniowy. Wybór trendu liniowego był oparty na znalezionych danych oraz na tym, że dla większych wartości (2-4) współczynnik przy najwyższej potędze był ujemny (model niefizyczny, pobór energii zacząłby maleć do 0). W wyniku otrzymaliśmy poniższe szeregi.
+```{r, results='hide'}
+#BoxCox.lambda(energia, method = "loglik")  
+# tmp2=tslm(energia ~ poly(trend,2,raw=TRUE) + season)
+# tmp1=tslm(energia ~ poly(trend,1,raw=TRUE) + season)
+# 
+# autoplot(tslm(energia ~ poly(trend,2,raw=TRUE) + season)$residuals)
+# autoplot(tslm(energia ~ poly(trend,1,raw=TRUE) + season)$residuals)
+#
+# ari2<-auto.arima(tmp2$residuals)
+# ari1<-auto.arima(tmp1$residuals)
+#
+# tmp=c(1:10)
+# for(l in 1:10){
+#   tmp[l]=tslm(energia ~ poly(trend,degree=l,raw=TRUE) + season, lambda = 0.75)$coefficients[l+1]
+# }
+# 
+# tmp
+
+# 
+# tmp<-BoxCox(energia, lambda = 0)
+# X<-diff(tmp, lag=12)
+# shapiro.test(X)$p
+# 
+# tmp=matrix(c(1:40), nrow=4)
+# lamb=c(0,1,0.75,2.5)
+# for(l in 1:10){
+#   for(m in 1:4){
+#     tmp[m,l]=tslm(energia ~ poly(trend,degree=l,raw=TRUE) + season, lambda=lamb[m])$coefficients[l+1]
+#   }
+# }
+# tmp
+
+# 
+# tmp=matrix(c(1:40), nrow=4)
+# lamb=c(0,1,0.75,2.5)
+# for(l in 1:10){
+#   for(m in 1:4){
+#     tmp[m,l]=min(
+#       sapply(
+#         1:5,function(o) 
+#           adf.test(
+#             tslm(energia ~ poly(trend,degree=l,raw=TRUE) + season, lambda=lamb[m])$resid,
+#             k=o)$p.val))
+#   }
+# }
+# tmp
+# 
+# 
+# 
+# 
+#autoplot(BoxCox(energia, lambda = 0.75))
 
 
-```{r, fig.cap="Przedstawienie analizowanych danych na wykresie."}
-autoplot(energia)
-autoplot(forecast::BoxCox(energia, lambda = "auto"))
-autoplot(forecast::BoxCox(energia, lambda = 0))
+
+
+```
+
+```{r, fig.cap="Wykres residuów dla różnicowania sezonowego.", fig.height=7}
+X=diff(BoxCox(energia,lambda = 0), lag=12)
+ggtsdisplay(X)
+```
+```{r, fig.cap="Wykres residuów dla dekompozycji parametrycznej.", fig.height=7}
+Y=tslm(energia ~ poly(trend,1,raw=TRUE) + season, lambda=0.75)
+ggtsdisplay(Y$residuals)
+```
+Możemy zauważyć, że dla obu metod funkcje autokorelacji, jak i częściowej autokorelacji szybko zanikają do 0. Możemy teraz spróbować zidentyfikować rzędy modeli $AR(p,P)_s$ oraz $MA(q,Q)_s$, gdzie duże litery oznaczają rząd modelu sezonowego, a $s$ -- sezon. W przypadku modelu opartego na różnicowaniu zidentyfikowaliśmy modele: $MA(3,0)_{12}$ oraz $AR(2,1)_{12}$. W przypadku modelu MA można jeszcze rozważyć modele $MA(4,0)_{12}$, $MA(3,1)_{12}$ oraz $MA(4,1)_{12}$, natomiast w przypadku modeli AR mogliśmy jeszcze rozważyć $AR(2,0)_{12}$ lub $AR(14,0)$. Jednak dla modeli MA, opóźnienie funkcji częściowej autokorelacji wynoszące $h=14$ "zignorowaliśmy". Nie daliśmy rady zinterpretować, dlaczego to opóźnienie powinno być istotne (jako dane odnośnie zużycia energii) oraz nie wystaje ono "bardzo" (mniej niż $3\sigma$) poza przedziały istotności.
+```{r, results='hide'}
+#auto.arima(X)
+#tmp=pacf(X)
+
+#0.3272435
+
+#1.96/sqrt(length(X))*3/2
+
+```
+
+W przypadku metody parametrycznej sytuacja jest bardziej jednoznaczna. Otrzymane modele to $MA(3,0)_{12}$ oraz $AR(2,0)_{12}$. Istnieje parę wartości opóźnienia dla obu funkcji, które są na granicy istotności, jednak zważają na wartość opóźnienia dla jakich przyjmują te wartości, nie znaleźliśmy argumentów, które mogły by tłumaczyć tą zależność.
+
+
+
+```{r}
+# 
+# order=c()
+# max_order=c(11,11,3,3,3)
+# max_order=c(6,6,2,2,3)
+# mat=array(dim=max_order)
+# for(p in 0:(max_order[1]-1)){
+#   for(q in 0:(max_order[2]-1)){
+#     for(P in 0:(max_order[3]-1)){
+#       for(Q in 0:(max_order[4]-1)){
+#         tmp<-Arima(X,order=c(p,0,q), seasonal = c(P,0,Q))
+#         mat[p+1,q+1,P+1,Q+1,]<-c(tmp$aic,tmp$bic,tmp$aicc)
+#       }
+#     }
+#   }
+# }
+# 
+# auto.arima()
+# 
+# 
+# 
+# 
+# tmp=auto.arima(Y$residuals)
+# 
+# 
+# qnorm(0.95)*diag(ar(X, aic = F, order.max = p, method = "mle")$asy.var.coef)/sqrt(length(X))
+# 
+# 
+# Y=tslm(energia ~ poly(trend,1,raw=TRUE) + season, lambda=0.75)
+# tmp=auto.arima(Y$residuals, ic="aic")
+# 
+# tmp$arma  
+# tmp=arima(Y,order=c(2,0,1), seasonal=c(1,0,1))
+# a=0.1
+# auto.arima(Y$residuals, ic="aicc")$coef-auto.arima(Y$residuals, ic="aic")$coef
+# 
+# 
+# auto.arima(Y$residuals, ic="aicc")$coef
+# auto.arima(Y$residuals, ic="aic")$coef
+# 
+# abs(tmp$coef)<qnorm(1-a)*diag(tmp$var.coef)
+# #/sqrt(length(X))
+# 
+# 
+# qnorm(1-a)*diag(tmp$var.coef)
+# tmp$coef
+
 
 ```
 
 
-```{r, fig.height=7}
+```{r}
+# mat=matrix(ncol=3, nrow=8)
+# #colnames(mat)<-rep(c("AIC","BIC",)
+# lamb=c(0, 0.75, 1, 2.5)
+# IC=c("aic","bic","aicc")
+# for(i in 1:6){
+#   for(j in 1:1){
+#     mat[j,i]<-toString(auto.arima(diff(BoxCox(energia, lambda=lamb[(i+2)/3]),lag=12), ic=IC[((i-1)%%3)+1])$arma[1:4])
+#   }
+# }
 
 
-X=diff(energia,lag=12)
-autoplot(X)
 
-X=diff(diff(energia,lag=12, differences = 1), differences = 1)
-PlotACF(X, main="")
-X=diff(diff(energia,lag=12, differences = 2), differences = 1)
-PlotACF(X, main="")
-X=diff(diff(diff(energia,lag=12, differences = 1), differences = 1), lag=14)
-PlotACF(X, main="")
+lamb=c(0, 0.5, 0.75, 1, 2.5)
+IC=c("aic","bic","aicc")
+mat=matrix(ncol=2*length(IC), nrow=length(lamb))
+important=mat
+important2=mat
+for(i in 1:3){
+  for(j in 1:length(lamb)){
+    tmp<-auto.arima(diff(BoxCox(energia, lambda=lamb[j]),lag=12), ic=IC[i])
+    mat[j,i]<-tmp$arma[1:4] %>% toString
+    important[j,i]<-any(abs(tmp$coef)<qnorm(1-a)*diag(tmp$var.coef))
+    important2[j,i]<-any(abs(tmp$coef)<qnorm(1-a)*diag(tmp$var.coef)/sqrt(length(energia)))
+  }
+}
+for(i in 4:6){
+  for(j in 1:length(lamb)){
+    tmp<-auto.arima(tslm(energia ~ poly(trend,1,raw=TRUE) + season, lambda=lamb[j])$residuals,ic=IC[i-3])
+    mat[j,i]<-tmp$arma[1:4] %>% toString
+    important[j,i]<-any(abs(tmp$coef)<qnorm(1-a)*diag(tmp$var.coef))
+    important2[j,i]<-any(abs(tmp$coef)<qnorm(1-a)*diag(tmp$var.coef)/sqrt(length(energia)))
+  }
+}
+#any(important)
+#any(important2)
+colnames(mat)<-rep(IC,2)   
+row.names(mat)<-lamb
 
-auto.arima(X)
+#kable(dt, "latex", booktabs = T) %>%
 
-tmp1<-auto.arima(X)
-tmp2<-auto.arima(energia)
+kable(mat, caption = "Rzędy modelu SARMA dla różnych kryteriów uzyskanych dzięki funkcji auto.arima.") %>%
+  kable_styling( full_width = T, font_size = 12) %>%
+  add_header_above(c("lambda"=1,"Różnicowanie" = 3, "Parametryczna" = 3))
 
-tmp3<-auto.arima(diff(diff(energia,lag=12)))
-
-sapply(1:14,FUN=function(h) Box.test(tmp1$residuals, lag = h)$p.val)
-sapply(1:14,FUN=function(h) Box.test(tmp2$residuals, lag = h)$p.val)
-sapply(1:14,FUN=function(h) Box.test(tmp3$residuals, lag = h)$p.val)
-
-shapiro.test(tmp1$residuals)$p
-shapiro.test(tmp2$residuals)$p
-shapiro.test(tmp3$residuals)$p
-
-
-X=forecast::BoxCox(diff(diff(energia,lag=12), differences = 1), lambda="auto")
-PlotACF(X, main="")
 
 ```
-
-
-
-
-
-
-
-
-
-```{r, fig.height=7}
-
-#X=BoxCox.lambda(diff(diff(energia,lag=12)))
-#PlotACF(X, main="")
-
-
-#shapiro.test(tmp3$residuals)$p
-
-
-#X=forecast::BoxCox(diff(diff(energia,lag=12), differences = 1), lambda="auto")
-#PlotACF(X, main="")
-
-```
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

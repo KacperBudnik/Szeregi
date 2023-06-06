@@ -31,7 +31,8 @@ library(gridExtra)
 library(DescTools)
 library(tseries)
 library(kableExtra)
-
+library(itsmr)
+library(ggfortify)
 ```
 
 ```{r, echo=FALSE}
@@ -78,7 +79,8 @@ mat[upper.tri(mat, diag = TRUE)]<-sapply(
 row.names(mat)<-1:k
 colnames(mat)<-1:k
 mat=cbind(1:k,mat)
-kable(round(mat, digits = 4))
+kable(round(mat, digits = 4)) %>%
+  kable_styling( full_width = F, font_size = 12,latex_options = "HOLD_position")
 ```
 W komórkach nad diagonalą znajdują się wyniki przy podziale próby na części zawierające kolejne obserwacje. W dolnej części podział nastąpił przy pomocy funkcji \verb|split| (w każdej części należała co `r k` obserwacja). W każdym przypadku wartość była większa od standardowego progu $\alpha=0.05$ zatem nie mamy podstaw do odrzucenia hipotezy o homoskedastyczności. Jednak warto mieć na uwadze], że w czwartym okresie wyniki są znacznie niższe niż w pozostałych.
 \subsection{Wybór modelu AR}
@@ -105,7 +107,8 @@ tmp=rbind(ar(X, aic = F, order.max = p, method = "yw")$ar,
           ar(X, aic = F, order.max = p, method = "burg")$ar,
           ar(X, aic = F, order.max = p, method = "ols")$ar)
 rownames(tmp)<-c("Yule-Walker", "MLE", "Burg", "OLS")
-kable(tmp, caption = paste0("Wyestymowane parametry dla modelu AR(",p,")."))
+kable(tmp, caption = paste0("Wyestymowane parametry dla modelu AR(",p,").")) %>%
+  kable_styling( full_width = F, font_size = 12,latex_options = "HOLD_position")
 ```
 ```{r}
 p=5
@@ -114,31 +117,45 @@ tmp=rbind(ar(X, aic = F, order.max = p, method = "yw")$ar,
           ar(X, aic = F, order.max = p, method = "burg")$ar,
           ar(X, aic = F, order.max = p, method = "ols")$ar)
 rownames(tmp)<-c("Yule-Walker", "MLE", "Burg", "OLS")
-kable(tmp, caption = paste0("Wyestymowane parametry dla modelu AR(",p,")."))
+kable(tmp, caption = paste0("Wyestymowane parametry dla modelu AR(",p,").")) %>%
+  kable_styling( full_width = F, font_size = 12,latex_options = "HOLD_position")
 ```
-Możemy zauważyć, że metoda Yule-walker'a dała najmniejsze (co do modułu) estymatory dla pierwszych trzech wartości, niezależnie od wielkości modelu. Jednak estymatory różnią się od siebie co najwyżej na drugim miejscu po przecinku, a w wielu przypadkach różnica jest jeszcze mniejsza. Natomiast jedynie estymator Burg'a zwraca wartości, które dla współczynnika ar4 są statystycznie nie istotne, na poziomu istotności $\alpha=0.05$.
+Możemy zauważyć, że metoda Yule-walker'a dała najmniejsze (co do modułu) estymatory dla pierwszych trzech wartości, niezależnie od wielkości modelu. Jednak estymatory różnią się od siebie co najwyżej na drugim miejscu po przecinku, a w wielu przypadkach różnica jest jeszcze mniejsza. Każdy z estymatorów zwrócił takie same wyniki: dla rzędu $p=3$ wszystkie parametry są statystycznie istotne, natomiast dla rzędu $p=5$ czwarty parametr jest statystycznie nieistotny, gdzie za parametry statystycznie nieistotne uznaliśmy te, dla których przedziały ufności na poziomie $\alpha=0.05$ pokrywają wartość $0$.
 ```{r, results='hide'}
 diag(ar(X, aic = F, order.max = p, method = "yw")$asy.var.coef)
 diag(ar(X, aic = F, order.max = p, method = "mle")$asy.var.coef)
 
 a=0.05
 
+# przedziały symetryczne, więc są nieistotne jeśli |\hat\phi|<1.96*sqrt(sigma2*n)
+
 p=3
-abs(ar(X, aic = F, order.max = p, method = "yw")$ar)<qnorm(1-a)*diag(ar(X, aic = F, order.max = p, method = "yw")$asy.var.coef)/sqrt(length(X))
-abs(ar(X, aic = F, order.max = p, method = "mle")$ar)<qnorm(1-a)*diag(ar(X, aic = F, order.max = p, method = "mle")$asy.var.coef)/sqrt(length(X))
-abs(ar(X, aic = F, order.max = p, method = "burg")$ar)<qnorm(1-a)*diag(ar(X, aic = F, order.max = p, method = "burg")$asy.var.coef)/sqrt(length(X))
+abs(ar(X, aic = F, order.max = p, method = "yw")$ar)<qnorm(1-a/2)*sqrt(diag(ar(X, aic = F, order.max = p, method = "yw")$asy.var.coef)/sqrt(length(X)))
+abs(ar(X, aic = F, order.max = p, method = "mle")$ar)<qnorm(1-a/2)*sqrt(diag(ar(X, aic = F, order.max = p, method = "mle")$asy.var.coef)/sqrt(length(X)))
+abs(ar(X, aic = F, order.max = p, method = "burg")$ar)<qnorm(1-a/2)*sqrt(diag(ar(X, aic = F, order.max = p, method = "burg")$asy.var.coef)/sqrt(length(X)))
 
 p=5
-abs(ar(X, aic = F, order.max = p, method = "yw")$ar)<qnorm(1-a)*diag(ar(X, aic = F, order.max = p, method = "yw")$asy.var.coef)/sqrt(length(X))
-abs(ar(X, aic = F, order.max = p, method = "mle")$ar)<qnorm(1-a)*diag(ar(X, aic = F, order.max = p, method = "mle")$asy.var.coef)/sqrt(length(X))
-abs(ar(X, aic = F, order.max = p, method = "burg")$ar)<qnorm(1-a)*diag(ar(X, aic = F, order.max = p, method = "burg")$asy.var.coef)/sqrt(length(X))
+abs(ar(X, aic = F, order.max = p, method = "yw")$ar)<qnorm(1-a/2)*sqrt(diag(ar(X, aic = F, order.max = p, method = "yw")$asy.var.coef))/sqrt(length(X))
+abs(ar(X, aic = F, order.max = p, method = "mle")$ar)<qnorm(1-a/2)*sqrt(diag(ar(X, aic = F, order.max = p, method = "mle")$asy.var.coef))/sqrt(length(X))
+abs(ar(X, aic = F, order.max = p, method = "burg")$ar)<qnorm(1-a/2)*sqrt(diag(ar(X, aic = F, order.max = p, method = "burg")$asy.var.coef))/sqrt(length(X))
 
-
-ar(X, aic = F, order.max = p, method = "mle")$ar
-diag(ar(X, aic = F, order.max = p, method = "mle")$asy.var.coef)
-qnorm(0.95)*diag(ar(X, aic = F, order.max = p, method = "mle")$asy.var.coef)/sqrt(length(X))
 ```
+Przykładowe przedziały ufności dla rzędu $p=5$ oraz metody największej wiarygodności wyglądają następująco.
+```{r}
+a=0.05
+p=5
+mat=matrix(nrow=3, ncol=p)
+mat[2,]=ar(X, aic = F, order.max = p, method = "mle")$ar
+mat[1,]=mat[2,]+qnorm(1-a/2)*sqrt(diag(ar(X, aic = F, order.max = p, method = "mle")$asy.var.coef))/sqrt(length(X))
+mat[3,]=mat[2,]-qnorm(1-a/2)*sqrt(diag(ar(X, aic = F, order.max = p, method = "mle")$asy.var.coef))/sqrt(length(X))
 
+rownames(mat)<-c("Górna granica","Wartość estyamtora", "Dolna granica")
+colnames(mat)<-sapply(1:p,function(txt) paste0("ar",txt))
+
+kable(tmp, caption = paste0("Przedziały ufności dla parametrów wyestymowanych metodą MLE dla modelu AR(5).")) %>%
+  kable_styling( full_width = F, font_size = 12,latex_options = "HOLD_position")
+
+```
 
 \subsection{Test białoszumowości dla reszt.}
 Możemy jeszcze sprawdzić dopasowanie modelu poprzez testowanie białoszumowości reszt. Podobnie jak w pierwszym sprawozdaniu, wykorzystaliśmy w tym celu test graficzny oraz formalne testy: Box-Pierce i Ljung-Box. P wartośc uzyskaną przy wykorzystaniu testów formalnych zamieszczono w poniższych tabelach.
@@ -149,7 +166,8 @@ tmp<-
     sapply(c("yule-walker", "burg", "ols", "mle"), FUN=function(met) 
       Box.test(ar(X,aic=F,order.max = p, method = met)$resid, type=typ)$p.val)) %>% t()
 colnames(tmp)<-c("Yule-Walker", "MLE", "Burg", "OLS")
-kable(tmp, caption = paste0("Testy białoszumowości dla modelu AR(",p,")."))
+kable(tmp, caption = paste0("Testy białoszumowości dla modelu AR(",p,").")) %>%
+  kable_styling( full_width = F, font_size = 12,latex_options = "HOLD_position")
 ```
 ```{r}
 p=5
@@ -158,7 +176,8 @@ tmp<-
     sapply(c("yule-walker", "burg", "ols", "mle"), FUN=function(met) 
       Box.test(ar(X,aic=F,order.max = p, method = met)$resid, type=typ)$p.val)) %>% t()
 colnames(tmp)<-c("Yule-Walker", "MLE", "Burg", "OLS")
-kable(tmp, caption = paste0("Testy białoszumowości dla modelu AR(",p,")."))
+kable(tmp, caption = paste0("Testy białoszumowości dla modelu AR(",p,").")) %>%
+  kable_styling( full_width = F, font_size = 12,latex_options = "HOLD_position")
 ```
 W każdym przypadku zwrócono wartość przewyższającą standardowy próg ufności, na poziomie $\alpha=0.05$, zatem nie mamy podstaw do odrzucenia hipotezy o niezależności reszt. Dodatkowo wykonując test graficzny otrzymaliśmy poniższą tabelę.
 ```{r}
@@ -183,7 +202,8 @@ tmp<-
 
 colnames(tmp)<-c("Yule-Walker", "MLE", "Burg", "OLS")
 rownames(tmp)<-c("AR(3)","AR(5)")
-kable(tmp, caption = paste0("Graficzny testy białoszumowości."))
+kable(tmp, caption = paste0("Graficzny testy białoszumowości.")) %>%
+  kable_styling( full_width = F, font_size = 12,latex_options = "HOLD_position")
 
 ```
 W tabeli wartość \verb|TRUE| oznacza, że próbka przeszła test białoszumowości, więc ponownie nie mamy podstaw do odrzucenia hipotezy o białoszumowości.
@@ -203,7 +223,8 @@ tmp<-
 
 colnames(tmp)<-c("Yule-Walker", "MLE", "Burg", "OLS")
 rownames(tmp)<-c("AR(3)","AR(5)")
-kable(tmp, caption = "p wartości testu Shapiro Wilka dla różnych modeli.")
+kable(tmp, caption = "p wartości testu Shapiro Wilka dla różnych modeli.") %>%
+  kable_styling( full_width = F, font_size = 12,latex_options = "HOLD_position")
 ```
 Tutaj analogicznie do metody graficznej, nie mamy podstaw do odrzucenia hipotezy o normalności reszt.
 \subsection{Predykcja}
@@ -225,6 +246,7 @@ W tym przypadku prognoza będzie liniowa. Predykcja długoterminowa jest trudnie
 
 
 \section{Dopasowanie modeli ARMA dla wybranych danych rzeczywistych.}
+\subsection{Transformatcja danych i identyfikacjia modelu SARIMA}
 <!--W drugim zadaniu postaramy się dopasować model \verb|ARMA| do danych rzeczywistych. Z powodu zalania serwerów Politechniki Wrocławskiej, skutkującym brakiem dostępu do listy możliwych danych, skorzystaliśmy z danych rozpatrywanych w poprzednim sprawozdaniu (z nadzieją, że były one dozwolone). Rozpatrywanymi danymi są dane odnośnie miesięcznej produkcji energii elektrycznej w Polsce. Pochodzą one z pakietu \verb|TSAFBook|. Na wykresie prezentują się następująco-->
 
 W drugim zadaniu postaramy się dopasować model \verb|ARMA| do danych rzeczywistych. Skorzystaliśmy z danych rozpatrywanych w poprzednim sprawozdaniu, zawierających informacje odnośnie miesięcznej produkcji energii elektrycznej w Polsce. Pochodzą one z pakietu \verb|TSAFBook|. Na wykresie prezentują się następująco.
@@ -354,11 +376,11 @@ W przypadku metody parametrycznej sytuacja jest bardziej jednoznaczna. Otrzymane
 # auto.arima(Y$residuals, ic="aicc")$coef
 # auto.arima(Y$residuals, ic="aic")$coef
 # 
-# abs(tmp$coef)<qnorm(1-a)*diag(tmp$var.coef)
+# abs(tmp$coef)<qnorm(1-a/2)*diag(tmp$var.coef)
 # #/sqrt(length(X))
 # 
 # 
-# qnorm(1-a)*diag(tmp$var.coef)
+# qnorm(1-a/2)*diag(tmp$var.coef)
 # tmp$coef
 
 
@@ -371,13 +393,13 @@ IC=c("aic","bic","aicc")
 mat=matrix(ncol=2*length(IC), nrow=length(lamb))
 important=mat
 important2=mat
-diff.vs.lambda=mat
+diff.vs.lambda=mat # by sprawdzić, czy rzeczywiście model nie proponuje dodatkowych różnicowań
 for(i in 1:3){
   for(j in 1:length(lamb)){
     tmp<-auto.arima(diff(BoxCox(energia, lambda=lamb[j]),lag=12), ic=IC[i])
     mat[j,i]<-tmp$arma[1:4] %>% toString
-    important[j,i]<-any(abs(tmp$coef)<qnorm(1-a)*diag(tmp$var.coef))
-    important2[j,i]<-any(abs(tmp$coef)<qnorm(1-a)*diag(tmp$var.coef)/sqrt(length(energia)))
+    important[j,i]<-any(abs(tmp$coef)<qnorm(1-a/2)*diag(tmp$var.coef))
+    important2[j,i]<-any(abs(tmp$coef)<qnorm(1-a/2)*diag(tmp$var.coef)/sqrt(length(energia)))
     diff.vs.lambda[j,i]<-all(tmp$arma[6:7]==0)
   }
 }
@@ -385,8 +407,8 @@ for(i in 4:6){
   for(j in 1:length(lamb)){
     tmp<-auto.arima(tslm(energia ~ poly(trend,1,raw=TRUE) + season, lambda=lamb[j])$residuals,ic=IC[i-3])
     mat[j,i]<-tmp$arma[1:4] %>% toString
-    important[j,i]<-any(abs(tmp$coef)<qnorm(1-a)*diag(tmp$var.coef))
-    important2[j,i]<-any(abs(tmp$coef)<qnorm(1-a)*diag(tmp$var.coef)/sqrt(length(energia)))
+    important[j,i]<-any(abs(tmp$coef)<qnorm(1-a/2)*diag(tmp$var.coef))
+    important2[j,i]<-any(abs(tmp$coef)<qnorm(1-a/2)*diag(tmp$var.coef)/sqrt(length(energia)))
     diff.vs.lambda[j,i]<-all(tmp$arma[6:7]==0)
   }
 }
@@ -397,29 +419,305 @@ for(i in 4:6){
 colnames(mat)<-rep(IC,2)   
 row.names(mat)<-lamb
 
-kable(mat, caption = "Rzędy modelu SARMA dla różnych kryteriów uzyskanych dzięki funkcji auto.arima.") %>%
+kable(mat, caption = "Rzędy modelu SARMA(p,q)(P,Q)[12] dla różnych kryteriów uzyskanych dzięki funkcji auto.arima. Rzędy podane w kolejności: p,q,P,Q") %>%
+  kable_styling( full_width = T, font_size = 12,latex_options = "HOLD_position") %>%
+  add_header_above(c("lambda"=1,"Różnicowanie" = 3, "Metoda parametryczna" = 3))
+```
+
+
+```{r IC_vs_lambda_nonseasonal}
+
+lamb=c(0, 0.5, 0.75, 1, 2.5)
+IC=c("aic","bic","aicc")
+mat=matrix(ncol=2*length(IC), nrow=length(lamb))
+diff.vs.lambda=mat
+for(i in 1:3){
+  for(j in 1:length(lamb)){
+    tmp<-auto.arima(diff(BoxCox(energia, lambda=lamb[j]),lag=12), ic=IC[i],seasonal = F)
+    mat[j,i]<-tmp$arma[1:2] %>% toString
+    diff.vs.lambda[j,i]<-all(tmp$arma[6:7]==0)
+  }
+}
+for(i in 4:6){
+  for(j in 1:length(lamb)){
+    tmp<-auto.arima(tslm(energia ~ poly(trend,1,raw=TRUE) + season, lambda=lamb[j])$residuals,ic=IC[i-3],seasonal = F)
+    mat[j,i]<-tmp$arma[1:2] %>% toString
+    diff.vs.lambda[j,i]<-all(tmp$arma[6:7]==0)
+  }
+}
+
+colnames(mat)<-rep(IC,2)   
+row.names(mat)<-lamb
+
+kable(mat, caption = "Rzędy modelu ARMA(p,q) dla różnych kryteriów uzyskanych dzięki funkcji auto.arima. Rzędy podane w kolejności: p,q") %>%
   kable_styling( full_width = T, font_size = 12,latex_options = "HOLD_position") %>%
   add_header_above(c("lambda"=1,"Różnicowanie" = 3, "Metoda parametryczna" = 3))
 
 
-
-#tmp<-auto.arima(diff(BoxCox(energia, lambda=2.5),lag=12))
-#tmp$aic
 ```
+
 Możemy zauważyć, że dla transformacji Box'a-Cox'a z parametrem $\lambda=2.5$, funkcja \verb|auto.arima| zwraca model, dla którego wszystkie rzędy są równe 0 (biały szum), jednak nie jest to poprawne oszacowanie. Rozpatrywane dane po tym przekształceniu sięgają wartości większych niż $2^{33}$, zatem sądzimy, że może to wynikać właśnie z zbyt dużych wartości.
 
-Co ciekawe, poza tym jednym przypadkiem, funkcja \verb|auto.arima| zwraca podobne oszacowania rzędu, niezależnie od zastosowanych przekształceń (w większości rzędy różnią się od siebie łącznie o 1). Jedynie dane po transformacie logarytmicznej dają modele znacznie mniejszych rzędów w metodzie parametrycznej.
+Co ciekawe, poza tym jednym przypadkiem, funkcja \verb|auto.arima| zwraca podobne oszacowania rzędu, niezależnie od zastosowanych przekształceń (w większości rzędy różnią się od siebie łącznie o 1). Jedynie dane po transformacie logarytmicznej czasem dają modele znacznie mniejszych rzędów w metodzie parametrycznej.
+
+Dodatkowo interesujące jest, że jeśli rozpatrzymy jedynie modele ARMA zamiast SARMA, to otrzymane rzędy są znacznie niższe oraz częściej przyjmowane są wyższe rzędy dla ruchomej średniej niż dla autoregresji, gdzie ta relacja była częściej odwrotna przy modelach SARMA. W dodatku zwrócone modele nie zależą od wybranej transformacji Box'a-Cox'a (oprócz $\lambda=2.5$, gdzie ponownie zwracene są modele rzędu 0) oraz jedynie kryterium Bayesowskie dla różnicowania daje inne modele. Reszta kryteriów zwraca ten sam model, nie zależnie czy korzystaliśmy z różnicowania, czy z metody parametrycznej. 
+
+\subsection{Porównanie dopasowania modelu.}
+W tej części porównamy metody estymacji wstępnej jak i właściwej. Dla metody różnicowania będziemy porównywać metody estymacji dla modelu $AR(12)$, ponieważ funkcje takie jak \verb|burg| służące do estymacji wstępnej przyjumują tylko jeden parametr, a chcielibyśmy rozważać model $ARMA(2,0)(1,0)[12]$. W przypadku metody parametrycznej wybraliśmy model $ARMA(2,0)=AR(2)$ (wybór dla kryterium bic oraz przekształcenia $\lambda=0.75$).
+
+```{r, results='hide'}
+tmp=arima(X, order=c(12,0,0))
+abs(tmp$coef)/sqrt(diag(tmp$var.coef))/1.96<1
+tmp=burg(X,12)
+abs(tmp$phi)/tmp$se.phi/1.96<1
+# w obu przypadkach jedyne istotne współczynniki to 1,2,12
+arima(X, order=c(12,0,0), include.mean = F)$coef-burg(X,12)$phi
+
+
+tmp=arima(Y$residuals, order=c(4,0,12))#, include.mean = F)
+abs(tmp$coef)/sqrt(diag(tmp$var.coef))/1.96
+tmp=hannan(Y$residuals,4,12)
+abs(tmp$phi)/tmp$se.phi/1.96
+abs(tmp$theta)/tmp$se.theta/1.96
+# w pierwszej istotny jest TYLKO ma12 jeśli uwzględniamy średnią, lub nic
+# w drugiej tylko ma10, ma11, ma12
+
+
+
+tmp=arima(Y$residuals, order=c(1,0,2), include.mean = F)
+abs(tmp$coef)/sqrt(diag(tmp$var.coef))/1.96<1
+tmp=hannan(Y$residuals,1,2)
+abs(tmp$phi)/tmp$se.phi/1.96<1
+abs(tmp$theta)/tmp$se.theta/1.96<1
+# w tym przypadku, to dla pierwszyej metody wszystko
+# dla drugiej ar1 i ma2 (bez ma1)
+
+tmp=hannan(X,1,2)
+arima(Y$residuals, order=c(1,0,2), include.mean = F)$coef[1]-tmp$phi
+arima(Y$residuals, order=c(1,0,2), include.mean = F)$coef[2:3]-tmp$theta
+arima(Y$residuals, order=c(1,0,2), include.mean = F)$coef
+c(tmp$phi,tmp$theta)
+
+
+
+tmp=arima(Y$residuals, order=c(2,0,0))
+abs(tmp$coef)/sqrt(diag(tmp$var.coef))/1.96<1
+tmp=burg(Y$residuals,2)
+abs(tmp$phi)/tmp$se.phi/1.96<1
+# w obu przypadkach jedyne istotne współczynniki to 1,2,12
+arima(Y$residuals, order=c(2,0,0), include.mean = F)$coef-burg(Y$residuals,2)$phi
 
 
 
 
 
+```
+Do estymacji parametrów przy użyciu metody właściwej użyliśmy funkcji \verb|arima|, która wykorzystała w tym celu metodę najmniejszych kwadratów, po czym ponawia estymacje, tym razem metodą największej wiarygodności, gdzie argumentami startowymi w algorytmie są te wyestymowane poprzednią metodą. W przypadku estymacji wstępnej wykorzystaliśmy funkcje \verb|burg| (dla różnicowania) oraz \verb|hannan| (dla metody parametrycznej).
+
+\subsubsection{Różnicowanie}
+W przypadku różnicowania obie funkcje zwróciły parametry, gdzie istotne statystycznie (na podstawie kryterium z wykładu, opierającego się na ilorazie estymowanego parametru w stosunku jego błędu) były: ar1, ar2 oraz ar12. Zatem otrzymujemy w tym sposobem model $SARMA(2,0)(1,0)[12]$, który od początku chcieliśmy otrzymać. Dlatego parametry statystycznie nieistotne zamieniliśmy na 0. Zacznijmy od rozważenie modelu opartego na parametrach estymowanych przez funkcję \verb|burg|. Reszty wtedy zachowują się w następujący sposób. 
+
+```{r, results='hide'}
+
+tmp=burg(X,12)
+param=tmp$phi
+param[abs(tmp$phi)/tmp$se.phi/1.96<1]=0
+tmp <- arima(X, order=c(12,0,0),fixed=param,include.mean=F)
+```
+```{r, fig.cap="Porównanie rezkładu residuów z rozkładem normalnym na wykresie kwantylowym."}
+qqnorm(tmp$residuals)
+```
+Widzimy, że wykres kwantylowy dobrze przybliża linię prostą. W dodatku test Shapiro-Wilka zwrócił p-value na poziomie `r shapiro.test(tmp$residuals)$p.val`, zatem na poziomie istotności $\alpha=0.05$ nie możemy odrzucić hipotezy o normalności reszt. Zastanówmy się jeszcze jak wygląda sytuacja z niezależnością reszt.
+
+```{r, fig.cap="Wykres funkcji autokorelacji dla rozpatrywanych reszt.", fig.height=7}
+ggtsdiag(tmp)
+```
+Na wykresie jedynie jedna wartość wystaje delikatnie poza przedział ufności, zatem reszty przechodzą test białoszumowości. Dodatkowo p-wartości dla tesu Ljungi-Box'a są powyżej wartości krytycznej, zatem nie możemy odrzucić hipotezy o białoszumowości.
+
+Sprawdźmy, czy te testy przejdzie model, którego parametry są estymowane metodą największej wiarygodności.
+```{r, results='hide'}
+tmp=arima(X, order=c(12,0,0), include.mean = F)
+abs(tmp$coef)/sqrt(diag(tmp$var.coef))/1.96<1
+param=tmp$coef
+param[abs(tmp$coef)/sqrt(diag(tmp$var.coef))/1.96<1]=0
+tmp <- arima(X, order=c(12,0,0),fixed=param,include.mean=F)
+```
+```{r, fig.cap="Porównanie rezkładu residuów z rozkładem normalnym na wykresie kwantylowym."}
+qqnorm(tmp$residuals)
+```
+Widzimy, że wykres kwantylowy dobrze przybliża linię prostą. W dodatku test Shapiro-Wilka zwrócił p-value na poziomie `r shapiro.test(tmp$residuals)$p.val`, zatem na poziomie istotności $\alpha=0.05$ nie możemy odrzucić hipotezy o normalności reszt. Zastanówmy się jeszcze jak wygląda sytuacja z niezależnością reszt.
+
+```{r, fig.cap="Wykres funkcji autokorelacji dla rozpatrywanych reszt.", fig.height=7}
+ggtsdiag(tmp)
+```
+Na wykresie jedynie jedna wartość wystaje delikatnie poza przedział ufności, zatem reszty przechodzą test białoszumowości. Dodatkowo p-wartości dla testu Ljungi-Box'a są powyżej wartości krytycznej, zatem nie możemy odrzucić hipotezy o białoszumowości.
+
+Obie metody przeszły wszystkie testy dając bardzo zbliżone wyniki. Nie jest to dziwne, jeśli spojrzymy, że różnica między parametrami modelu wynosiła kolejno `r (arima(X, order=c(12,0,0), include.mean = F)$coef-burg(X,12)$phi)[c(1,2,12)]`, czyli była o przynajmniej rząd wielkości mniejsza niż wartość parametrów.
 
 
+\subsubsection{Metoda parametryczna}
+Dla tej metody wybraliśmy model $AR(2)$ korzystając z kryterium bic. Wybór padł właśnie na to kryterium, ponieważ przy wyborze innych rozpatrywanych modeli, wiele ze zwracanych parametrów były statystycznie nieistotne, a w przypadku modelu $ARMA(4,12)$, bez uwzględnienia średniej, wszystkie parametry stały się statystycznie nieistotne. Dla metody opartej o funkcję \verb|burg| otrzymaliśmy następujące wyniki.  
+```{r, results='hide'}
+tmp=burg(Y$residuals,2)
+param=tmp$phi
+param[abs(tmp$phi)/tmp$se.phi/1.96<1]=0
+param
+tmp <- arima(Y$residuals, order=c(2,0,0),fixed=param,include.mean=F)
+```
+```{r, fig.cap="Porównanie rezkładu residuów z rozkładem normalnym na wykresie kwantylowym."}
+qqnorm(tmp$residuals)
+```
+Widzimy, że wykres kwantylowy nie dobrze przybliża linii prostej. W dodatku test Shapiro-Wilka zwrócił p-value na poziomie `r shapiro.test(tmp$residuals)$p.val`, zatem na poziomie istotności $\alpha=0.05$ mamy podstawy do odrzucenia hipotezy o normalności reszt. Zastanówmy się jeszcze jak wygląda sytuacja z niezależnością reszt.
+
+```{r, fig.cap="Wykres funkcji autokorelacji dla rozpatrywanych reszt.", fig.height=7}
+ggtsdiag(tmp)
+```
+Na wykresie jedynie jedna wartość wystaje delikatnie poza przedział ufności, zatem reszty przechodzą test białoszumowości. Dodatkowo p-wartości dla tesu Ljungi-Box'a są powyżej wartości krytycznej, zatem nie możemy odrzucić hipotezy o białoszumowości.
+
+Sprawdźmy czy dostaniemy inne wyniki korzystając z estymacji parametrów metodą największej wiarygodności.
+```{r, results='hide'}
+tmp=arima(Y$residuals, order=c(2,0,0), include.mean = F)
+param=tmp$coef
+param
+tmp <- arima(Y$residuals, order=c(2,0,0),fixed=param,include.mean=F)
+```
+```{r, fig.cap="Porównanie rezkładu residuów z rozkładem normalnym na wykresie kwantylowym."}
+qqnorm(tmp$residuals)
+```
+Widzimy, że wykres kwantylowy nie dobrze przybliża linii prostej. W dodatku test Shapiro-Wilka zwrócił p-value na poziomie `r shapiro.test(tmp$residuals)$p.val`, zatem na poziomie istotności $\alpha=0.05$ mamy podstawy do odrzucenia hipotezy o normalności reszt. Zastanówmy się jeszcze jak wygląda sytuacja z niezależnością reszt.
+
+```{r, fig.cap="Wykres funkcji autokorelacji dla rozpatrywanych reszt.", fig.height=7}
+ggtsdiag(tmp)
+```
+Na wykresie jedynie dwie wartość wystaje delikatnie poza przedział ufności (czyli więcej niż przy estymacji wstępnej), zatem reszty przechodzą test białoszumowości. Dodatkowo p-wartości dla tesu Ljungi-Box'a są powyżej wartości krytycznej, zatem nie możemy odrzucić hipotezy o białoszumowości.
+
+W tym przypadku wyniki nadal były podobne, jednak pojawiły się różnice. Różnice między estymowanymi parametrami różniły się o 2 rzędy wielkości.
+<!--`r burg(Y$residuals,2)$phi-arima(Y$residuals, order=c(2,0,0), include.mean = F)$coef`-->
+Jeśli postanowilibyśmy wybrać model z tabeli 9 -- $ARMA(1,2)$ -- otrzymalibyśmy wyniki bardzo zbliżone do wyników otrzymanych powyżej, jednak p-wartości były by wyższe (ale nadal znacznie <!--dwukrotnie--> niższe niż poziom krytyczny).
+
+\subsection{Porównanie z funkcjami acf i pacf}
+Możemy rozpatrzyć jeszcze jak wyglądają funkcje acf i pacf dla wybranych modeli.
+```{r}
+tmp=arima(X, order=c(12,0,0), include.mean = F)
+#abs(tmp$coef)/sqrt(diag(tmp$var.coef))/1.96<1
+param=tmp$coef
+param[abs(tmp$coef)/sqrt(diag(tmp$var.coef))/1.96<1]=0
+#param
+N=20000
+acf.sim.X<-1:N %>%
+  sapply( function(g) Acf(arima.sim(n = length(X), list(ar = param)), plot=F, lag.max = 24)$acf[2:25]) %>%
+  apply(1,mean)
+pacf.sim.X<-1:N %>%
+  sapply( function(g) pacf(arima.sim(n = length(X), list(ar = param)), plot=F, lag.max = 24)$acf) %>%
+  apply(1,mean) 
 
 
+tmp=arima(Y$residuals, order=c(2,0,0), include.mean = F)
+#abs(tmp$coef)/sqrt(diag(tmp$var.coef))/1.96<1
+param=tmp$coef
+param[abs(tmp$coef)/sqrt(diag(tmp$var.coef))/1.96<1]=0
+#param
+
+acf.sim.Y<-1:N %>%
+  sapply( function(g) Acf(arima.sim(n = length(Y$residuals), list(ar = param)), plot=F, lag.max = 24)$acf[2:25]) %>%
+  apply(1,mean)
+pacf.sim.Y<-1:N %>%
+  sapply( function(g) pacf(arima.sim(n = length(Y$residuals), list(ar = param)), plot=F, lag.max = 24)$acf) %>%
+  apply(1,mean)  
 
 
+tmp=arima(Y$residuals, order=c(5,0,0), seasonal=c(0,0,1), include.mean = F)
+#abs(tmp$coef)/sqrt(diag(tmp$var.coef))/1.96<1
+param=tmp$coef
+#param
+#
+acf.sim.Y.s<-1:N %>%
+  sapply( function(g) Acf(arima.sim(n = length(Y$residuals), list(ar = param[1:5], sma=param[6])), plot=F, lag.max = 24)$acf[2:25]) %>%
+  apply(1,mean)
+pacf.sim.Y.s<-1:N %>%
+  sapply( function(g) pacf(arima.sim(n = length(Y$residuals), list(ar = param[1:5], sma=param[6])), plot=F, lag.max = 24)$acf) %>%
+  apply(1,mean)  
+
+
+```
+\subsubsection{Różnicowanie}
+Zacznijmy od porównania funkcji acf i pacf danych po zróżnicowaniu (i oczywiście innych używanych transformatach) z wysymulowanymi wartościami teoretycznymi dla rozpatrywanego modelu $SARMA(2,0)(1,0)[12]$. Wykresy prezentują się następująco.
+```{r, fig.cap="Wykresy pacf dla rozpatrywanych danych (czarne słupki) porównane z danymi wysymulawanymi (niebieskie kropki)."}
+ggPacf(X,lag.max = 24, main="") + 
+  geom_point(
+    mapping = aes(x = 1:24, y = pacf.sim.X),color="blue"
+    )
+```
+```{r, fig.cap="Wykresy acf dla rozpatrywanych danych (czarne słupki) porównane z danymi wysymulawanymi (niebieskie kropki)."}
+ggAcf(X,lag.max = 24, main="") + 
+  geom_point(
+    mapping = aes(x = 1:24, y = acf.sim.X),color="blue"
+    )
+```
+Możemy zauważyć, że empiryczna funkcja pacf dobrze przybliża dane uzyskane podczas symulacji. Niestety funkcje acf pokrywają się jedynie dla pierwszych paru (około 8) opóźnień. 
+
+\subsubsection{Model parametryczny}
+Porównajmy teraz funkcje acf i pacf, ale dla danych po dekompozycji metodą parametryczną (i oczywiście innych używanych transformatach) z wysymulowanymi wartościami teoretycznymi dla rozpatrywanego modelu $ARMA(2,0)$. Wykresy prezentują się następująco.
+```{r, fig.cap="Wykresy pacf dla rozpatrywanych danych (czarne słupki) porównane z danymi wysymulawanymi (niebieskie kropki)."}
+ggPacf(Y$residuals,lag.max = 24, main="") + 
+  geom_point(
+    mapping = aes(x = 1:24, y = pacf.sim.Y),color="blue"
+    )
+```
+```{r, fig.cap="Wykresy acf dla rozpatrywanych danych (czarne słupki) porównane z danymi wysymulawanymi (niebieskie kropki)."}
+ggAcf(Y$residuals,lag.max = 24, main="") + 
+  geom_point(
+    mapping = aes(x = 1:24, y = acf.sim.Y),color="blue"
+    )
+```
+Możemy zauważyć, że empiryczna funkcja pacf dobrze przybliża dane uzyskane podczas symulacji. Dla większości opóźnień funkcja mieści się w przedziałach istotności oraz dla tych opóźnień symulacje zwróciły wartości bliskie 0. Podobna sytuacja jest dla funkcji acf. Jednak obie funkcje mają problem z opóźnieniem $h=3$, gdzie rozpatrywane wykresy zwracają znacząco różniące się wartości.
+
+\subsubsection{Model parametryczny z sezonowością}
+Poprzedni punkt był dla modelu uzyskanego przy pomocy kryterium Bayesowskiego. Sprawdźmy jak zmienią się wykresy, jeżeli skorzystamy z kreyterium Akkaike. W tym przypadku rozpatrujemy model $SARMA(5,0)(0,1)[12]$ i wykresy wyglądają następująco.
+```{r, fig.cap="Wykresy pacf dla rozpatrywanych danych (czarne słupki) porównane z danymi wysymulawanymi (niebieskie kropki)."}
+ggPacf(Y$residuals,lag.max = 24, main="") + 
+  geom_point(
+    mapping = aes(x = 1:24, y = pacf.sim.Y.s),color="blue"
+    )
+```
+```{r, fig.cap="Wykresy acf dla rozpatrywanych danych (czarne słupki) porównane z danymi wysymulawanymi (niebieskie kropki)."}
+ggAcf(Y$residuals,lag.max = 24, main="") + 
+  geom_point(
+    mapping = aes(x = 1:24, y = acf.sim.Y.s),color="blue"
+    )
+```
+W tym przypadku straciliśmy (nieznacznie) dopasowanie funkcji acf, ale za to otrzymaliśmy znaczne poprawienie dopasowania funkcji pacf dla początkowych wartości. Jednak nadal, jak w poprzednim przypadku, dla opóźnienia $h=14$ i funkcji pacf symulowane wartości znacząco się różnią od empirycznych.
+
+\subsection{Predykcja}
+Mając już odpowiednie modele możemy przystąpić do predykcji zużycia energii w przyszłych latach. Dla różnicowania rozpatrujemy model $SARMA(2,0)(1,0)[12]$, natomiast dla metody parametrycznej model $ARMA(2,0)$. W wyniku dostaliśmy poniższe prognozy.
+```{r, fig.cap="Prognoza dla różnicowania"}
+tmp=arima(X, order=c(12,0,0), include.mean = F)
+#abs(tmp$coef)/sqrt(diag(tmp$var.coef))/1.96<1
+param=tmp$coef
+param<-param[abs(tmp$coef)/sqrt(diag(tmp$var.coef))/1.96>1]
+#param
+predict(arima(X, order=c(2,0,0), seasonal = c(1,0,0), fixed = param, include.mean = F), n.ahead = 24)$pred %>%
+  diffinv(lag=12,xi=BoxCox(energia,lambda=0)[(length(energia)-11):(length(energia))]) %>%
+  BoxCoxInv(lambda=0)-> prognoza
+autoplot(cbind(prognoza,energia)) + ylab("Energia")
+```
+```{r, fig.cap="Prognoza dla metody parametrycznej"}
+tmp=arima(Y$residuals, order=c(2,0,0), include.mean = F)
+param=tmp$coef
+param<-param[abs(tmp$coef)/sqrt(diag(tmp$var.coef))/1.96>1]
+#param
+tmp=predict(arima(Y$residuals, order=c(2,0,0), fixed = param, include.mean = F), n.ahead = 24)$pred
+
+tmp<-tmp+Y$coef[1]+Y$coef[2]*((length(Y)+1):(length(Y)+24))+c(Y$coef[10:13],0,Y$coef[3:9]) # sezonowość dodana dziwnie, by uwzględnić, że przwidujemy od września
+
+prognoza<-BoxCoxInv(tmp, lambda=0.75)
+
+autoplot(cbind(prognoza,energia)) + ylab("Energia")
+```
+Możemy zobaczyć, że w obu przypadkach otrzymaliśmy podobne wyniki. Dla różnicowania dostaliśmy większe wyniki oraz ta metoda odwzorowała lepiej zachowanie zużycia przed momentami największego zużycia energii, porównując z ostatnimi latami(w ostatnich latach zużycie w tym okresie nie różniło się tak bardzo jak w poprzednich, co udało się odwzorować).
+
+\subsection{Podsumowanie}
+Najlepiej dopasowane były modele uwzględniające sezonowość, czyli modele SARMA. Dla tych modeli symulacje funkcji acf i pacf dobrze pokrywały dane empiryczne. Porównując metody dekompozycji, lepsza okazała się ta oparta na różnicowaniu sezonowym. Reszty otrzymanego modelu przechodziły wszystkie testy (graficzne i formalne) na białoszumowość i normalność, czego nie otrzymaliśmy korzystając z metod parametrycznych. W dodatku dopasowanie modelu okazało się przyjemniejszy. Przy metodzie parametrycznej otrzymywaliśmy najczęściej modele ARMA, natomiast przy różnicowaniu pojawił się model AR, który jest dużo prostszy w modelowaniu i interpretacji (przykładowo funkcji acf i pacf, w modelu mieszanym dochodzą dodatkowe zależności). Jednak niezależnie od rozpatrywanych metod dekompozycji, jak i estymacji, zawsze otrzymywaliśmy duże wartości funckji pacf dla opóźnienia $h=14$.
 
 
 

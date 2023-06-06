@@ -365,30 +365,20 @@ W przypadku metody parametrycznej sytuacja jest bardziej jednoznaczna. Otrzymane
 ```
 
 
-```{r}
-# mat=matrix(ncol=3, nrow=8)
-# #colnames(mat)<-rep(c("AIC","BIC",)
-# lamb=c(0, 0.75, 1, 2.5)
-# IC=c("aic","bic","aicc")
-# for(i in 1:6){
-#   for(j in 1:1){
-#     mat[j,i]<-toString(auto.arima(diff(BoxCox(energia, lambda=lamb[(i+2)/3]),lag=12), ic=IC[((i-1)%%3)+1])$arma[1:4])
-#   }
-# }
-
-
-
+```{r IC_vs_lambda}
 lamb=c(0, 0.5, 0.75, 1, 2.5)
 IC=c("aic","bic","aicc")
 mat=matrix(ncol=2*length(IC), nrow=length(lamb))
 important=mat
 important2=mat
+diff.vs.lambda=mat
 for(i in 1:3){
   for(j in 1:length(lamb)){
     tmp<-auto.arima(diff(BoxCox(energia, lambda=lamb[j]),lag=12), ic=IC[i])
     mat[j,i]<-tmp$arma[1:4] %>% toString
     important[j,i]<-any(abs(tmp$coef)<qnorm(1-a)*diag(tmp$var.coef))
     important2[j,i]<-any(abs(tmp$coef)<qnorm(1-a)*diag(tmp$var.coef)/sqrt(length(energia)))
+    diff.vs.lambda[j,i]<-all(tmp$arma[6:7]==0)
   }
 }
 for(i in 4:6){
@@ -397,18 +387,43 @@ for(i in 4:6){
     mat[j,i]<-tmp$arma[1:4] %>% toString
     important[j,i]<-any(abs(tmp$coef)<qnorm(1-a)*diag(tmp$var.coef))
     important2[j,i]<-any(abs(tmp$coef)<qnorm(1-a)*diag(tmp$var.coef)/sqrt(length(energia)))
+    diff.vs.lambda[j,i]<-all(tmp$arma[6:7]==0)
   }
 }
-#any(important)
-#any(important2)
+# True==Good
+#!any(important)
+#!any(important2)
+#all(diff.vs.lambda)
 colnames(mat)<-rep(IC,2)   
 row.names(mat)<-lamb
 
-#kable(dt, "latex", booktabs = T) %>%
-
 kable(mat, caption = "Rzędy modelu SARMA dla różnych kryteriów uzyskanych dzięki funkcji auto.arima.") %>%
-  kable_styling( full_width = T, font_size = 12) %>%
-  add_header_above(c("lambda"=1,"Różnicowanie" = 3, "Parametryczna" = 3))
+  kable_styling( full_width = T, font_size = 12,latex_options = "HOLD_position") %>%
+  add_header_above(c("lambda"=1,"Różnicowanie" = 3, "Metoda parametryczna" = 3))
 
 
+
+#tmp<-auto.arima(diff(BoxCox(energia, lambda=2.5),lag=12))
+#tmp$aic
 ```
+Możemy zauważyć, że dla transformacji Box'a-Cox'a z parametrem $\lambda=2.5$, funkcja \verb|auto.arima| zwraca model, dla którego wszystkie rzędy są równe 0 (biały szum), jednak nie jest to poprawne oszacowanie. Rozpatrywane dane po tym przekształceniu sięgają wartości większych niż $2^{33}$, zatem sądzimy, że może to wynikać właśnie z zbyt dużych wartości.
+
+Co ciekawe, poza tym jednym przypadkiem, funkcja \verb|auto.arima| zwraca podobne oszacowania rzędu, niezależnie od zastosowanych przekształceń (w większości rzędy różnią się od siebie łącznie o 1). Jedynie dane po transformacie logarytmicznej dają modele znacznie mniejszych rzędów w metodzie parametrycznej.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

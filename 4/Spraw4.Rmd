@@ -1,0 +1,317 @@
+---
+title: "ASzCz - Spr 4"
+author: "Kacper Budnik"
+date: "2023-06-18"
+output:
+  pdf_document: 
+    toc: true
+    number_sections: true
+    extra_dependencies: ["polski", "mathtools", "amsthm", "amssymb", "icomma", "upgreek", "xfrac", "float", "hyperref", "caption", "enumitem"]
+fontsize: 12pt
+---
+
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE, eval = TRUE, fig.pos = "H", dev.args=list(encoding="CP1257.enc"), fig.path='figure/', fig.align='center', fig.pos='H',fig.width=5, fig.height=3)
+```
+
+```{r, echo=FALSE}
+library(EnvStats)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(vcd)
+library(knitr)
+library(TSAFBook)
+library(astsa)
+library(forecast)
+library(gridExtra)
+library(DescTools)
+library(tseries)
+library(kableExtra)
+library(itsmr)
+library(ggfortify)
+#library(ramify)
+#library(HDclassif)
+#library(ipred)
+#library(rpart)
+#library(rpart.plot)
+library(klaR)
+```
+\newpage
+\section{Dopasowanie modelu SARIMA do szeregu gnp}
+\subsection{Wprowadzenie}
+W pierwszym zadaniu, ostatniego już sprawozdania, przeprowadzimy kompletną analizę i diagnostykę. Do analizy wykorzystamy dane \verb|gnp| z pakietu \verb|astsa|. Dane te dotyczą dochodu narodowego USA oraz pochodzą z okresu od `r (time(gnp)[1] %% 1)*frequency(gnp)+1` kwartału `r floor(time(gnp)[1])` roku do `r (time(gnp)[length(gnp)] %% 1)*frequency(gnp)+1` kwartału `r floor(time(gnp)[length(gnp)])` roku. Na wykresie prezentują się następująco.
+
+```{r, fig.cap="Przedstawienie rozpatrywanych danych na wykresie."}
+autoplot(gnp)
+```
+```{r, results='hide'}
+X=window(gnp,end=c(1989,4))
+Y=window(gnp,start=c(1990,1))
+```
+W sprawozdaniu, oprócz analizy danych, sprawdzimy dodatkowo jakość dopasowania modelu. Dlatego podzieliliśmy nasz zbiór na część uczącą oraz testową. Łączna liczba obserwacji wyniosła `r length(gnp)`. Zbiór uczący zawiera obserwacje przed datą 1990 roku, natomiast zbiór testowy od 1990 (włącznie). W ten sposób otrzymaliśmy dwa zbiory liczące odpowiednio `r length(X)` oraz `r length(Y)` obserwacji, zatem zbiór uczący zawiera `r round(length(X)/length(gnp), digits = 4)*100`% obserwacji.
+
+\subsection{Transformacje danych}
+Przed przystąpieniem do analizy, nałóżmy na dane odpowiednie transformacje Box'a-Cox'a oraz różnicowania. Zacznijmy od przetransformowania danych. Rozpatrzyliśmy pięć przypadków, oprócz standardowych transformat: logarytmiczna ($\lambda=0$), pierwiastkowa ($\lambda=0.5$) oraz bez transformacji ($\lambda=1$, odjęcie 1 od danych), zastosowaliśmy dodatkowo transformacje dla lambd otrzymanych w wyniku działania algorytmów Guerrero ($\lambda=$ `r round(BoxCox.lambda(X, method="guerrero"), digits=3)`) oraz w wyniku maksymalizacji logarytmicznej funkcji wiarygodności ($\lambda=$ `r round(BoxCox.lambda(X, method="loglik"),digits=3)`). Widzimy, że w wyniku algorytmów dostaliśmy zbliżone wartości. Sprawdźmy, czy nasze dane przechodzą formalne testy stacjonarności.
+
+```{r}
+
+#BoxCox.lambda(X, method="guerrero")
+#BoxCox.lambda(X, method = "loglik")
+
+tmp1=(BoxCox(X, lambda = 0))
+tmp2=(BoxCox(X, lambda = BoxCox.lambda(X, "guerrero")))
+tmp3=(BoxCox(X, lambda = BoxCox.lambda(X, "loglik")))
+tmp4=(BoxCox(X, lambda = 1/2))
+tmp5=(BoxCox(X, lambda = 1))
+
+
+mat=matrix(nrow=5,ncol=8)
+
+mat[1,1]=kpss.test(tmp1, null = "Trend", lshort = FALSE)$p.val
+mat[1,2]=kpss.test(tmp1, null = "Level", lshort = FALSE)$p.val
+
+mat[2,1]=kpss.test(tmp2, null = "Trend", lshort = FALSE)$p.val
+mat[2,2]=kpss.test(tmp2, null = "Level", lshort = FALSE)$p.val
+
+mat[3,1]=kpss.test(tmp3, null = "Trend", lshort = FALSE)$p.val
+mat[3,2]=kpss.test(tmp3, null = "Level", lshort = FALSE)$p.val
+
+mat[4,1]=kpss.test(tmp4, null = "Trend", lshort = FALSE)$p.val
+mat[4,2]=kpss.test(tmp4, null = "Level", lshort = FALSE)$p.val
+
+mat[5,1]=kpss.test(tmp5, null = "Trend", lshort = FALSE)$p.val
+mat[5,2]=kpss.test(tmp5, null = "Level", lshort = FALSE)$p.val
+
+
+mat[1,3]=kpss.test(tmp1, null = "Trend", lshort = TRUE)$p.val
+mat[1,4]=kpss.test(tmp1, null = "Level", lshort = TRUE)$p.val
+
+mat[2,3]=kpss.test(tmp2, null = "Trend", lshort = TRUE)$p.val
+mat[2,4]=kpss.test(tmp2, null = "Level", lshort = TRUE)$p.val
+
+mat[3,3]=kpss.test(tmp3, null = "Trend", lshort = TRUE)$p.val
+mat[3,4]=kpss.test(tmp3, null = "Level", lshort = TRUE)$p.val
+
+mat[4,3]=kpss.test(tmp4, null = "Trend", lshort = TRUE)$p.val
+mat[4,4]=kpss.test(tmp4, null = "Level", lshort = TRUE)$p.val
+
+mat[5,3]=kpss.test(tmp5, null = "Trend", lshort = TRUE)$p.val
+mat[5,4]=kpss.test(tmp5, null = "Level", lshort = TRUE)$p.val
+
+
+
+H=5
+mat.adf=matrix(nrow=5, ncol=2*H)
+
+mat.adf[1,1:H]=sapply(1:H, function(h) 
+  adf.test(tmp1, k = h)$p.val)
+mat.adf[2,1:H]=sapply(1:H, function(h) 
+  adf.test(tmp2, k = h)$p.val)
+mat.adf[3,1:H]=sapply(1:H, function(h) 
+  adf.test(tmp3, k = h)$p.val)
+mat.adf[4,1:H]=sapply(1:H, function(h) 
+  adf.test(tmp4, k = h)$p.val)
+mat.adf[5,1:H]=sapply(1:H, function(h) 
+  adf.test(tmp5, k = h)$p.val)
+
+
+tmp1=diff(BoxCox(X, lambda = 0))
+tmp2=diff(BoxCox(X, lambda = BoxCox.lambda(X, "guerrero")))
+tmp3=diff(BoxCox(X, lambda = BoxCox.lambda(X, "loglik")))
+tmp4=diff(BoxCox(X, lambda = 1/2))
+tmp5=diff(BoxCox(X, lambda = 1))
+
+mat[1,5]=kpss.test(tmp1, null = "Trend", lshort = FALSE)$p.val
+mat[1,6]=kpss.test(tmp1, null = "Level", lshort = FALSE)$p.val
+
+mat[2,5]=kpss.test(tmp2, null = "Trend", lshort = FALSE)$p.val
+mat[2,6]=kpss.test(tmp2, null = "Level", lshort = FALSE)$p.val
+
+mat[3,5]=kpss.test(tmp3, null = "Trend", lshort = FALSE)$p.val
+mat[3,6]=kpss.test(tmp3, null = "Level", lshort = FALSE)$p.val
+
+mat[4,5]=kpss.test(tmp4, null = "Trend", lshort = FALSE)$p.val
+mat[4,6]=kpss.test(tmp4, null = "Level", lshort = FALSE)$p.val
+
+mat[5,5]=kpss.test(tmp5, null = "Trend", lshort = FALSE)$p.val
+mat[5,6]=kpss.test(tmp5, null = "Level", lshort = FALSE)$p.val
+
+
+mat[1,7]=kpss.test(tmp1, null = "Trend", lshort = TRUE)$p.val
+mat[1,8]=kpss.test(tmp1, null = "Level", lshort = TRUE)$p.val
+
+mat[2,7]=kpss.test(tmp2, null = "Trend", lshort = TRUE)$p.val
+mat[2,8]=kpss.test(tmp2, null = "Level", lshort = TRUE)$p.val
+
+mat[3,7]=kpss.test(tmp3, null = "Trend", lshort = TRUE)$p.val
+mat[3,8]=kpss.test(tmp3, null = "Level", lshort = TRUE)$p.val
+
+mat[4,7]=kpss.test(tmp4, null = "Trend", lshort = TRUE)$p.val
+mat[4,8]=kpss.test(tmp4, null = "Level", lshort = TRUE)$p.val
+
+mat[5,7]=kpss.test(tmp5, null = "Trend", lshort = TRUE)$p.val
+mat[5,8]=kpss.test(tmp5, null = "Level", lshort = TRUE)$p.val
+
+
+mat.adf[1,(H+1):(2*H)]=sapply(1:H, function(h) 
+  adf.test(tmp1, k = h)$p.val)
+mat.adf[2,(H+1):(2*H)]=sapply(1:H, function(h) 
+  adf.test(tmp2, k = h)$p.val)
+mat.adf[3,(H+1):(2*H)]=sapply(1:H, function(h) 
+  adf.test(tmp3, k = h)$p.val)
+mat.adf[4,(H+1):(2*H)]=sapply(1:H, function(h) 
+  adf.test(tmp4, k = h)$p.val)
+mat.adf[5,(H+1):(2*H)]=sapply(1:H, function(h) 
+  adf.test(tmp5, k = h)$p.val)
+
+
+
+mat=round(mat, digits = 3)
+rownames(mat)<-round(c(0, BoxCox.lambda(X, method="guerrero"), BoxCox.lambda(X, method="loglik"), 0.5, 1), digits=2)
+colnames(mat)<-rep(c("Trend","Level"),4)
+
+mat.adf=round(mat.adf, digits = 3)
+rownames(mat.adf)<-round(c(0, BoxCox.lambda(X, method="guerrero"), BoxCox.lambda(X, method="loglik"), 0.5, 1), digits=2)
+colnames(mat.adf)<-rep(1:H,2)
+
+
+
+
+col=matrix(sapply(mat, FUN = function(x) if(x>0.05) "#00C400" else "#000000"), ncol=8, nrow=5)
+col.adf=matrix(sapply(mat.adf, FUN = function(x) if(x<=0.05) "#00C400" else "#000000"), ncol=2*H, nrow=5)
+
+
+kab<-mat %>%
+  kbl(caption="p-wartość dla testu KPSS dla danych po transformacji Box-Cox. Bez znancza, że dane nie były różnicowane, natomiast Róż, że dane zostały jednokrotnie zróżnicowane. Skróty 'Kr' oraz 'Dł' oznaczają czy w teście kpss została użyta wersja odpowiednio krótka czy długa.", booktabs = TRUE) %>%
+  kable_paper(full_width = F) %>%
+  kable_styling(latex_options = "HOLD_position") %>%
+  add_header_above(c("Lambda"=1,"Bez / Kr" = 2, "Bez / Dł" = 2,"Róż / Kr" = 2, "Róż / Dł" = 2))
+
+for(i in 2:(9)){
+  kab <- column_spec(kab, i,  color=col[,i-1])
+}
+
+
+kab.adf<-mat.adf %>%
+  kbl(caption="p-wartość dla testu ADF dla danych po transformacji Box-Cox. Wartość domyślna testu to h=5.",booktabs = TRUE) %>%
+  kable_paper(full_width = F, ) %>%
+  kable_styling(latex_options = "HOLD_position") %>%
+  add_header_above(c("Lambda"=1,"Bez różnicowania" = H, "Po różnicowaniu" = H))
+
+for(i in 2:(2*H+1)){
+  kab.adf <- column_spec(kab.adf, i,  color=col.adf[,i-1])
+}
+
+kab.adf
+kab
+```
+
+Na zielono zaznaczono testy te wartości, dla których nie mamy podstaw do odrzucenia hipotezy o stacjonarności lub mamy podstawy do odrzucenia hipotezy o niestacjonarności (przechodzą test na stacjonarność), na poziomie ufności $\alpha=0.05$.  Możemy zauważyć, że oba  testy (w choć jednym wariancie) dla danych niezróżnicowanych przechodzą jedynie te dane, dla których $\lambda$ w transformacji BC została wybrana przy pomocy wbudowanych algorytmów. Natomiast dla danych zróżnicowanych niemal wszystkie dane przeszły testy stacjonarności niezależnie od wybranych parametrów (jedynie dane bez transformat nie poradziły sobie z testem kpss dla modelu bez trendu). Dlatego w dalszym sprawozdaniu będziemy się posługiwać danymi po jednokrotnym zróżnicowaniu. Z powodu najprostszej interpretacji będziemy korzystać z transformacji BC dla parametru $\lambda=0$. Dane przed zróżnicowaniem prezentują się następująco.
+```{r, fig.height=2,fig.cap="Rozpatrywane dane po transformacji BC dla lambdy wynoszącej 0"}
+autoplot(BoxCox(X, lambda = 0))
+```
+Widzimy wyraźny trend w danych (przetransformowanych), który wydaje się być trendem liniowym. Zatem jednokrotne różnicowanie idealnie nadaje się w tym przypadku. 
+\subsection{Identyfikacja modelu}
+W celu identyfikacji modelu przyjrzyjmy się danym po zróżnicowaniu i transformacjach oraz ich funkcjom acf i pacf.
+```{r, fig.height=4, fig.cap="Wykresy dla rozpatrywanych danych po transformacji BC i różnicowaniu z krokiem h=1."}
+ggtsdisplay(diff(BoxCox(X, lambda=0)))
+```
+Widzimy, że obie funkcje zależności między obserwacjami, szybko zanikają. Zatem to potwierdza, że mamy do czynienia z szeregiem stacjonarnym. W danych nie zauważyliśmy żadnych zależności sezonowych. Na podstawie powyższych wykresów możemy spróbować zidentyfikować rzędy modeli \verb|AR| oraz \verb|MA|. Rozpatrywanymi modelami mogą być modele: $AR(1)$, $MA(2)$ oraz $MA(1)$. Wartości funkcji acf dla opóźnienia $h=5$ oraz funkcji pacf dla opóźnienia $h=12$ uznaliśmy za nieistotne. Wartości te nieznacząco wystają poza przedziały istotności (mniej niż 3 odchylenia standardowe, na niebiesko zaznaczono poziom odległości dwóch opóźnień standardowych od zera).
+
+Rozpatrywanie jedynie modeli \verb|AR| oraz \verb|MA| bardzo ogranicza nasze możliwości. Dlatego rozpatrzmy jeszcze modele mieszane \verb|ARMA|. Spójrzmy na jakie modele wskazują poszczególne ktyretia informacyjne.
+
+```{r}
+tmp=diff(BoxCox(X, lambda=0))
+n=length(tmp)
+inc.mean=TRUE
+mat=sapply(0:5, function(p)
+  sapply(0:5, function(q)
+      tryCatch(arima(tmp,order=c(p,0,q), include.mean = inc.mean)$log, error=function(e) 0)))
+
+k=sapply(0:5, function(p)
+    sapply(0:5, function(q)
+        1+p+q+inc.mean))
+AIC=-2*mat + 2*k
+
+AICc=AIC + (2*k^2+2*k)/(n-k-1)
+
+BIC=-2*mat + k*log(n)
+
+
+colnames(AIC)=colnames(BIC)=colnames(AICc)=rownames(AIC)=rownames(BIC)=rownames(AICc)=0:5
+
+#which(AIC==min(AIC))
+#which(AICc==min(AICc))
+#which(BIC==min(BIC))
+
+#tmp=AIC
+#c(floor(which(tmp==min(tmp))/6), which(tmp==min(tmp)) %% 6-1)
+
+
+#?arima(tmp, )
+#auto.arima(tmp, ic="bic")
+#tmp.mat
+# tmp=round(AIC, digits = 1)
+# cell_spec(tmp,"latex",color = ifelse(tmp<= sort(tmp)[4], "blue", "black")) %>% kable("latex", escape = F)
+# tmp
+# tmp
+# tmp %>%
+#   cell_spec("latex",color = ifelse(tmp<= sort(tmp)[4], "blue", "black")) %>%
+#   matrix(nrow=6, ncol=6) %>% 
+#   kable("latex", escape = F) %>%
+
+kab<-AIC %>%
+  kbl(caption="Wartości kryterium AIC. Numer kolumny wyznacza rząd modelu AR, podczas gdy numer wiersza rząd modelu MA.",booktabs = TRUE) %>%
+  kable_paper(full_width = F, ) %>%
+  kable_styling(latex_options = "HOLD_position") #%>%
+  #add_header_above(c("Lambda"=1,"Bez różnicowania" = H, "Po różnicowaniu" = H))
+mini=sort(AIC)[5]
+for(i in 2:(ncol(AIC)+1)){
+  kab <- column_spec(kab, i,  color=ifelse(AIC[,i-1]<=mini,"blue","black"))
+}
+kab
+
+kab<-AICc %>%
+  kbl(caption="Wartości kryterium AICc. Numer kolumny wyznacza rząd modelu AR, podczas gdy numer wiersza rząd modelu MA.",booktabs = TRUE) %>%
+  kable_paper(full_width = F, ) %>%
+  kable_styling(latex_options = "HOLD_position") #%>%
+  #add_header_above(c("Lambda"=1,"Bez różnicowania" = H, "Po różnicowaniu" = H))
+mini=sort(AICc)[5]
+for(i in 2:(ncol(AICc)+1)){
+  kab <- column_spec(kab, i,  color=ifelse(AICc[,i-1]<=mini,"blue","black"))
+}
+kab
+
+kab<-BIC %>%
+  kbl(caption="Wartości kryterium BIC. Numer kolumny wyznacza rząd modelu AR, podczas gdy numer wiersza rząd modelu MA.",booktabs = TRUE) %>%
+  kable_paper(full_width = F, ) %>%
+  kable_styling(latex_options = "HOLD_position") #%>%
+  #add_header_above(c("Lambda"=1,"Bez różnicowania" = H, "Po różnicowaniu" = H))
+mini=sort(BIC)[5]
+for(i in 2:(ncol(BIC)+1)){
+  kab <- column_spec(kab, i,  color=ifelse(BIC[,i-1]<=mini,"blue","black"))
+}
+kab
+
+```
+Na niebiesko zaznaczona najmniejsze wartości każdego z kryteriów. Widzimy, że kryteria AIC oraz AICC są zgodne co do rzędów modeli (wraz z kolejnością ich wyboru). Natomiast kryterium Bayesowskie wskazuje na modele znacznie niższych rzędów, w szczególności wybiera ono model $ARMA(1,0)$ podczas gdy pozostałe preferują model $ARMA(3,2)$ 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -38,6 +38,9 @@ library(ggfortify)
 #library(rpart)
 #library(rpart.plot)
 library(klaR)
+library(TSA)
+library(fpp)
+library(pracma)
 ```
 \newpage
 \section{Dopasowanie modelu SARIMA do szeregu gnp}
@@ -223,17 +226,31 @@ Widzimy, że obie funkcje zależności między obserwacjami, szybko zanikają. Z
 
 Rozpatrywanie jedynie modeli \verb|AR| oraz \verb|MA| bardzo ogranicza nasze możliwości. Dlatego rozpatrzmy jeszcze modele mieszane \verb|ARMA|. Spójrzmy na jakie modele wskazują poszczególne ktyretia informacyjne.
 
-```{r}
+```{r criterion, cache=TRUE}
+H=5
 tmp=diff(BoxCox(X, lambda=0))
 n=length(tmp)
 inc.mean=TRUE
-mat=sapply(0:5, function(p)
-  sapply(0:5, function(q)
-      tryCatch(arima(tmp,order=c(p,0,q), include.mean = inc.mean)$log, error=function(e) 0)))
+mat1=sapply(0:H, function(p)
+  sapply(0:H, function(q)
+      tryCatch(stats::arima(tmp,order=c(p,0,q), include.mean = inc.mean, method="ML")$log, error=function(e) 0)))
 
-k=sapply(0:5, function(p)
-    sapply(0:5, function(q)
+k1=sapply(0:H, function(p)
+    sapply(0:H, function(q)
         1+p+q+inc.mean))
+
+inc.mean=FALSE
+mat2=sapply(0:H, function(p)
+  sapply(0:H, function(q)
+      tryCatch(stats::arima(tmp,order=c(p,0,q), include.mean = inc.mean, method="ML")$log, error=function(e) 0)))
+
+k2=sapply(0:H, function(p)
+    sapply(0:H, function(q)
+        1+p+q+inc.mean))
+
+k=cbind(k1,k2)
+mat=cbind(mat1,mat2)
+
 AIC=-2*mat + 2*k
 
 AICc=AIC + (2*k^2+2*k)/(n-k-1)
@@ -241,44 +258,27 @@ AICc=AIC + (2*k^2+2*k)/(n-k-1)
 BIC=-2*mat + k*log(n)
 
 
-colnames(AIC)=colnames(BIC)=colnames(AICc)=rownames(AIC)=rownames(BIC)=rownames(AICc)=0:5
+colnames(AIC)=colnames(BIC)=colnames(AICc)=rep(0:H,2)
+rownames(AIC)=rownames(BIC)=rownames(AICc)=0:H
 
-#which(AIC==min(AIC))
-#which(AICc==min(AICc))
-#which(BIC==min(BIC))
-
-#tmp=AIC
-#c(floor(which(tmp==min(tmp))/6), which(tmp==min(tmp)) %% 6-1)
-
-
-#?arima(tmp, )
-#auto.arima(tmp, ic="bic")
-#tmp.mat
-# tmp=round(AIC, digits = 1)
-# cell_spec(tmp,"latex",color = ifelse(tmp<= sort(tmp)[4], "blue", "black")) %>% kable("latex", escape = F)
-# tmp
-# tmp
-# tmp %>%
-#   cell_spec("latex",color = ifelse(tmp<= sort(tmp)[4], "blue", "black")) %>%
-#   matrix(nrow=6, ncol=6) %>% 
-#   kable("latex", escape = F) %>%
 
 kab<-AIC %>%
   kbl(caption="Wartości kryterium AIC. Numer kolumny wyznacza rząd modelu AR, podczas gdy numer wiersza rząd modelu MA.",booktabs = TRUE) %>%
   kable_paper(full_width = F, ) %>%
-  kable_styling(latex_options = "HOLD_position") #%>%
-  #add_header_above(c("Lambda"=1,"Bez różnicowania" = H, "Po różnicowaniu" = H))
+  kable_styling(latex_options = "HOLD_position") %>%
+  add_header_above(c(" "=1,"Z średnią" = H+1, "Bez średniej" = H+1))
 mini=sort(AIC)[5]
 for(i in 2:(ncol(AIC)+1)){
   kab <- column_spec(kab, i,  color=ifelse(AIC[,i-1]<=mini,"blue","black"))
+
 }
 kab
 
 kab<-AICc %>%
   kbl(caption="Wartości kryterium AICc. Numer kolumny wyznacza rząd modelu AR, podczas gdy numer wiersza rząd modelu MA.",booktabs = TRUE) %>%
   kable_paper(full_width = F, ) %>%
-  kable_styling(latex_options = "HOLD_position") #%>%
-  #add_header_above(c("Lambda"=1,"Bez różnicowania" = H, "Po różnicowaniu" = H))
+  kable_styling(latex_options = "HOLD_position") %>%
+  add_header_above(c(" "=1,"Z średnią" = H+1, "Bez średniej" = H+1))
 mini=sort(AICc)[5]
 for(i in 2:(ncol(AICc)+1)){
   kab <- column_spec(kab, i,  color=ifelse(AICc[,i-1]<=mini,"blue","black"))
@@ -288,8 +288,8 @@ kab
 kab<-BIC %>%
   kbl(caption="Wartości kryterium BIC. Numer kolumny wyznacza rząd modelu AR, podczas gdy numer wiersza rząd modelu MA.",booktabs = TRUE) %>%
   kable_paper(full_width = F, ) %>%
-  kable_styling(latex_options = "HOLD_position") #%>%
-  #add_header_above(c("Lambda"=1,"Bez różnicowania" = H, "Po różnicowaniu" = H))
+  kable_styling(latex_options = "HOLD_position") %>%
+  add_header_above(c(" "=1,"Z średnią" = H+1, "Bez średniej" = H+1))
 mini=sort(BIC)[5]
 for(i in 2:(ncol(BIC)+1)){
   kab <- column_spec(kab, i,  color=ifelse(BIC[,i-1]<=mini,"blue","black"))
@@ -297,7 +297,132 @@ for(i in 2:(ncol(BIC)+1)){
 kab
 
 ```
-Na niebiesko zaznaczona najmniejsze wartości każdego z kryteriów. Widzimy, że kryteria AIC oraz AICC są zgodne co do rzędów modeli (wraz z kolejnością ich wyboru). Natomiast kryterium Bayesowskie wskazuje na modele znacznie niższych rzędów, w szczególności wybiera ono model $ARMA(1,0)$ podczas gdy pozostałe preferują model $ARMA(3,2)$ 
+Na niebiesko zaznaczona najmniejsze wartości każdego z kryteriów. Widzimy, że kryteria AIC oraz AICC są zgodne co do rzędów modeli (wraz z kolejnością ich wyboru). Natomiast kryterium Bayesowskie wskazuje na modele znacznie niższych rzędów, w szczególności wybiera ono model $ARMA(1,0)$ podczas gdy pozostałe preferują model $ARMA(3,2)$. Możemy jeszcze rozpatrywać modele $ARMA(0,2)$ z kryterium BIC oraz $ARMA(2,2)$ i $ARMA(3,1)$ z kryterium Akkaike.
+\subsection{Badanie dopasowania szeregu na podstawie residuów}
+```{r}
+# order=cbind(c(1,1,0), c(0,1,2), c(3,1,2), c(2,1,2), c(3,1,1))
+# tmp=diff(BoxCox(X, lambda=0))
+# tmp<-apply(order, 2, function(ord) arima(BoxCox(X, lambda=0), order = ord))
+# for(i in 1:5) test(tmp[[i]]$residuals)
+# 
+# 
+# stats::arima(gnp, order = order[,1], lambda=1)
+
+```
+
+```{r}
+# 
+# ks.test(tmp[[3]]$residuals, "pnorm")
+# 
+# shapiro.test(tmp[[2]]$residuals)
+# 
+# jarque.bera.test(tmp[[2]]$residuals)
+# 
+# for(i in 1:5){
+#   ggAcf(tmp[[i]]$residuals^2)
+#   ggPacf(tmp[[i]]$residuals^2)
+# }
+# 
+# 
+# 
+# ggPacf(tmp[[5]]$residuals^2)
+# 
+#   
+# 
+# McLeod.Li.test(tmp[[5]])
+# 
+# ggtsdiag(tmp[[5]])
+# 
+# 
+# 
+# checkresiduals(tmp[[5]])
+```
+
+
+
+
+
+```{r}
+# 
+# pes<-forecast(stats::arima(BoxCox(X, lambda=0), order=c(3,1,2)), lambda=0, h=length(Y))
+# 
+# 
+# autoplot(pes)
+# autoplot(cbind(pes,Y))
+# 
+# 
+# res=data.frame(cbind(pes,Y))
+# inter=linspace(time(Y)[1],time(Y)[length(Y)], length(Y))
+# ggplot(res) + 
+#     geom_ribbon(aes(x=inter,ymin = pes.Lo.95,
+#                   ymax = pes.Hi.95),
+#               fill = "#6092ce",alpha = 5/10) +
+#   geom_ribbon(aes(x=inter,ymin = pes.Lo.80,
+#                   ymax = pes.Hi.80),
+#               fill = "#6962b5",alpha = 5/10) + 
+#   geom_line(aes(x=inter, y=Y))
+# 
+# 
+# 
+# 
+# 
+# ggplot()+                    # basic graphical object
+#   geom_line(aes(y=y1), colour="red") +  # first layer
+#   geom_line(aes(y=y2), colour="green") 
+# autoplot(cbind(pes,Y))
+# cbind(pes,Y)
+# 
+# pes
+# 
+# forecast(tmp[[1]])
+# arima(gnp, order=c(2,1,0))
+```
+
+
+
+
+
+
+
+
+```{r}
+# 
+# order=list(c(1,1,0), c(0,1,2), c(3,1,2), c(2,1,2), c(3,1,1))
+# 
+# for(ord in order){
+#   tmp=stats::arima(BoxCox(X, lambda=0), order=ord)
+#   
+# 
+#   
+# }
+# 
+# 
+# tmp=diff(BoxCox(X, lambda=0))
+# tmp<-apply(order, 2, function(ord) arima(tmp, order = ord))
+# for(i in 1:5) test(tmp[[i]]$residuals)
+# pes<-forecast(stats::arima(BoxCox(X, lambda=0), order=c(3,1,2)), lambda=0, h=length(Y))
+# 
+# 
+# stats::arima(gnp, order = order[,1], lambda=1)
+# 
+# 
+# 
+# 
+# tmp=stats::arima(BoxCox(X, lambda=0), order=order[[5]])
+# 
+# 
+# stats::arima(BoxCox(X, lambda=0), order=c(2,1,3), include.mean = T,method="ML")
+# stats::arima(diff(BoxCox(X, lambda=0)), order=c(2,0,3), include.mean = F,method="ML")
+# 
+# 
+# 
+# 
+# stats::arima(diff(BoxCox(X, lambda=0)), order=c(1,0,1), include.mean = T)
+# 
+# tmp
+
+
+```
 
 
 
@@ -311,6 +436,162 @@ Na niebiesko zaznaczona najmniejsze wartości każdego z kryteriów. Widzimy, ż
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+\section{Porównanie dokładności prognoz dla danych euretail}
+\subsection{Wprowadzenie}
+W drugiej części sprawozdania porównany prognozy dla danych euretail. Dane te zawierają kwartalne indeks handlu detalicznego w strefie euro (17 krajów), 1996-2011, obejmujący handel detaliczny i hurtowy oraz naprawę pojazdów samochodowych i motocykli. Na wykresie dane prezentują się następująco.
+```{r}
+
+autoplot(euretail)
+```
+
+
+```{r,cache=TRUE}
+# autoplot(diff(diff(euretail),lag=4))
+# ndiffs(euretail)
+# nsdiffs(euretail)
+# 
+# auto.arima(euretail)
+# BoxCox.lambda(euretail ,upper = 5)
+# BoxCox.lambda(euretail, method = "loglik")
+# 
+# auto.arima(BoxCox(euretail, lambda=1.85))
+
+
+ggtsdisplay(diff(diff(BoxCox(euretail, lambda=0),lag=4)))
+
+
+#cross(0:2,0:2)
+
+
+
+
+
+
+#apply(as.matrix(expand.grid(0:2,0:3)), 1, function(P)
+#  apply(as.matrix(expand.grid(0:2,0:3)), 1, function(Q)
+#         paste0("(",paste(P[1],Q[1],P[2],Q[2],sep = ","),")")))
+
+
+#pes=apply(as.matrix(expand.grid(0:2,0:3)), 1, function(p) paste(p[1],p[2]))
+
+
+```
+
+
+```{r seasona_criterion,cache=TRUE}
+
+
+
+ord=4
+s.ord=2
+
+tmp=BoxCox(euretail, lambda=0)
+mat=apply(as.matrix(expand.grid(0:ord,0:s.ord)), 1, function(P)
+      apply(as.matrix(expand.grid(0:ord,0:s.ord)), 1, function(Q)
+         arima(tmp, order=c(P[1],1,Q[1]), seasonal = c(P[2],1,Q[2]), include.mean=T)$log))
+
+
+k=apply(as.matrix(expand.grid(0:ord,0:s.ord)), 1, function(P)
+    apply(as.matrix(expand.grid(0:ord,0:s.ord)), 1, function(Q)
+        1+sum(P)+sum(Q)+inc.mean))
+
+#k
+
+AIC=-2*mat + 2*k
+
+AICc=AIC + (2*k^2+2*k)/(n-k-1)
+
+BIC=-2*mat + k*log(n)
+
+rownames(BIC)=colnames(BIC)=rep(0:ord,s.ord+1)
+rownames(AIC)=colnames(AIC)=rep(0:ord,s.ord+1)
+rownames(AICc)=colnames(AICc)=rep(0:ord,s.ord+1)
+
+
+grups=c(1,rep(ord+1,s.ord+1))
+names(grups)<-c(" ", sapply(0:s.ord, paste))
+
+```
+
+```{r}
+
+
+kab.bic<-(BIC-min(BIC)) %>%
+  round(digits=1) %>%
+  kbl(caption="Wartości kryterium BIC. Numer kolumny wyznacza rząd modelu AR, podczas gdy numer wiersza rząd modelu MA.",booktabs = TRUE) %>%
+  kable_paper(full_width = F, ) %>%
+  kable_styling(latex_options = "HOLD_position", font_size=10) %>%
+  add_header_above(grups) %>%
+  pack_rows(index = grups[-1])
+mini=sort(BIC)[5]
+for(i in 2:(ncol(BIC)+1)){
+  kab.bic <- column_spec(kab.bic, i,  color=ifelse(BIC[,i-1]<=mini,"blue","black"))
+}
+
+kab.aic<-(AIC-min(AIC)) %>%
+  round(digits=1) %>%
+  kbl(caption="Wartości kryterium BIC. Numer kolumny wyznacza rząd modelu AR, podczas gdy numer wiersza rząd modelu MA.",booktabs = TRUE) %>%
+  kable_paper(full_width = F, ) %>%
+  kable_styling(latex_options = "HOLD_position", font_size=10) %>%
+  add_header_above(grups) %>%
+  pack_rows(index = grups[-1])
+mini=sort(AIC)[5]
+for(i in 2:(ncol(BIC)+1)){
+  kab.aic <- column_spec(kab.aic, i,  color=ifelse(AIC[,i-1]<=mini,"blue","black"))
+}
+
+kab.aicc<-(AICc-min(AICc)) %>%
+  round(digits=1) %>%
+  kbl(caption="Wartości kryterium BIC. Numer kolumny wyznacza rząd modelu AR, podczas gdy numer wiersza rząd modelu MA.",booktabs = TRUE) %>%
+  kable_paper(full_width = F, ) %>%
+  kable_styling(latex_options = "HOLD_position", font_size=10) %>%
+  add_header_above(grups) %>%
+  pack_rows(index = grups[-1])
+mini=sort(AICc)[5]
+for(i in 2:(ncol(BIC)+1)){
+  kab.aicc <- column_spec(kab.aicc, i,  color=ifelse(AICc[,i-1]<=mini,"blue","black"))
+}
+
+kab.bic
+kab.aic
+kab.aicc
+
+
+```
 
 
 

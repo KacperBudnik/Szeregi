@@ -6,7 +6,7 @@ output:
   pdf_document: 
     toc: true
     number_sections: true
-    extra_dependencies: ["polski", "mathtools", "amsthm", "amssymb", "icomma", "upgreek", "xfrac", "float", "hyperref", "caption", "enumitem"]
+    extra_dependencies: ["polski", "mathtools", "amsthm", "amssymb", "icomma", "upgreek", "xfrac", "float", "hyperref", "caption", "enumitem", "animate", "titlesec","tabularx"]
 fontsize: 12pt
 ---
 
@@ -41,9 +41,10 @@ library(klaR)
 library(TSA)
 library(fpp)
 library(pracma)
+library(animation)
 ```
 \newpage
-\section{Dopasowanie modelu SARIMA do szeregu gnp}
+\section{Dopasowanie modelu ARIMA do szeregu gnp}
 \subsection{Wprowadzenie}
 W pierwszym zadaniu, ostatniego już sprawozdania, przeprowadzimy kompletną analizę i diagnostykę. Do analizy wykorzystamy dane \verb|gnp| z pakietu \verb|astsa|. Dane te dotyczą dochodu narodowego USA oraz pochodzą z okresu od `r (time(gnp)[1] %% 1)*frequency(gnp)+1` kwartału `r floor(time(gnp)[1])` roku do `r (time(gnp)[length(gnp)] %% 1)*frequency(gnp)+1` kwartału `r floor(time(gnp)[length(gnp)])` roku. Na wykresie prezentują się następująco.
 
@@ -226,8 +227,7 @@ Widzimy, że obie funkcje zależności między obserwacjami, szybko zanikają. Z
 
 Rozpatrywanie jedynie modeli \verb|AR| oraz \verb|MA| bardzo ogranicza nasze możliwości. Dlatego rozpatrzmy jeszcze modele mieszane \verb|ARMA|. Spójrzmy na jakie modele wskazują poszczególne kryteria informacyjne.
 
-```{r criterion, cache=FALSE}
-{
+```{r}
 # H=5
 # tmp=BoxCox(X, lambda=0)
 # n=length(tmp)
@@ -301,8 +301,9 @@ Rozpatrywanie jedynie modeli \verb|AR| oraz \verb|MA| bardzo ogranicza nasze mo�
 #   kab <- column_spec(kab, i,  color=ifelse(BIC[,i-1]<=mini,"blue","black"))
 # }
 # kab
-}
+```
 
+```{r criterion, cache=TRUE}
 H=5
 tmp=BoxCox(X, lambda=0)
 n=length(tmp)
@@ -376,21 +377,65 @@ for(i in 2:(ncol(BIC)+1)){
   kab <- column_spec(kab, i,  color=ifelse(BIC[,i-1]<=mini,"blue","black"))
 }
 kab
-
-
 ```
 Na niebiesko zaznaczona pięć najmniejszych wartości w każdej z tabel. Widzimy, że kryteria AIC oraz AICC są zgodne co do czterech pierwszych wyborów modelu (wraz z kolejnością ich wyboru). Możemy zauważyć, że kryterium Bayesowskie preferuje modele niższych rzędów. Wszystkie kryteria są jednak zgodne co do wyboru modelu $ARMA(1,3)$. Kryterium BIC wskazuje znaczącą przewagę tego modelu nad innymi, podczas gdy pozostałe kryteria pozwalają rozważać jeszcze modele $ARMA(5,1)$, $ARMA(1,4)$ oraz $ARMA(4,3)$.
 <!-- , w szczególności wybiera ono model $ARMA(1,1)$ podczas gdy pozostałe preferują model $ARMA(3,3)$. Kryterium BIC wskazuje znaczące różnice między jakością dopasowania modelu $ARMA(1,1)$ a pozostałymi. Natomiast według pozostałych kryteriów można jeszcze rozpatrywać modele $ARMA(2,3)$, $ARMA(3,2)$ oraz $ARMA(0,3)$. Różnica dla tego ostatniego kryterium jest duża, jednak jest również wskazywana (jako jedna z 5 najmniejszych) przez wszystkie kryteria informacyjne (tak samo jak $ARMA(1,1)$).  -->
 \subsection{Badanie dopasowania szeregu na podstawie residuów}
-```{r, fig.height=5, fig.width=4}
+```{r}
 order=cbind(c(1,1,3), c(5,1,1), c(1,1,4), c(4,1,3), c(1,1,0),c(0,1,2),c(0,1,1))
 tmp=BoxCox(X, lambda=0)
 tmp<-apply(order, 2, function(ord) stats::arima(BoxCox(X, lambda=0), order = ord, method = "ML"))
+```
+```{r, fig.height=5, fig.width=4, results='hide', eval=FALSE}
 for(i in 1:length(tmp)){
   a=2
   par(mar = c(a, a, a, a))
   itsmr::test(tmp[[i]]$residuals)
 }
+```
+Wykonaliśmy testy dla residuów (funkcja \verb|itsmr::test()|) takie jak: test Ljungi-Boxa (niezależność), McLeod-Li (warunkowa heteroskedastyczność), Turning point (niezależność), Sign Test (losowość),  Wilcoxon signed-rank test (niezależność). Po przeprowadzeniu testów, p-wartości dla wszystkich testów i wszystkich modeli, oprócz modelu $MA(1)$, były większe niż poziom istotności (0.05). Ostatni model nie przeszedł pestów Ljungi-Boxa oraz Turning point test.
+Wyniki tych testów  świadczą, że mamy do czynienia z resztami, których kwadraty (lub wartości bezwzględne) są istotnie skorelowane. Spójrzmy na przykładowe reszty.
+
+
+```{r,fig.cap="Wykresy dla wartości bezwzględnej reszt otrzymanych z modelu ARMA(1,3)."}
+
+ggtsdisplay(abs(stats::arima(BoxCox(X, lambda=0), order = order[,1], method = "ML")$res))
+
+```
+Widzimy, że wartości funkcji skorelowani dla modułu reszt dla wielu opóźnień wykraczają poza przedziały ufności, świadcząc o ich istotnym skorelowaniu. 
+
+
+```{r}
+
+order=cbind(c(1,1,3), c(5,1,1), c(1,1,4), c(4,1,3), c(1,1,0),c(0,1,2),c(0,1,1))
+tmp<-apply(
+  order, 2, function(ord) shapiro.test(stats::arima(BoxCox(X, lambda=0), order = ord, method = "ML")$resid)$p.val) %>%
+  as.matrix()%>%
+  t()
+colnames(tmp)<-apply(order, 2, function(ord) paste0("ARMA(",ord[1],",",ord[3],")"))
+
+kab<- tmp %>%
+  round(digits=3) %>%
+  kbl(caption="p-wartości dla testu shapiro-wilka",booktabs = TRUE) %>%
+  kable_paper(full_width = F, ) %>%
+  kable_styling(latex_options = "HOLD_position", font_size=10)
+for(i in 1:(ncol(tmp))){
+  kab <- column_spec(kab, i,  color=ifelse(tmp[i]<=0.05,"red","green"))
+}
+kab
+```
+Widzimy, że formalny test normalności przeszły jedynie drugi i trzeci model. Jednak pierwzsy model (tak samo jak drugi i trzeci) jest na granicy poziomu ufności $\alpha=0.05$. Spójrzmy jeszcze na wykresy kwantylowe.
+```{r, fig.cap="Porównanie residuów dla modelu ARMA(1,3) z rozkładem normalnym."}
+order=cbind(c(1,1,3), c(5,1,1), c(1,1,4), c(4,1,3), c(1,1,0),c(0,1,2),c(0,1,1))
+qqnorm(stats::arima(BoxCox(X, lambda=0), order = order[,1], method = "ML")$resid)
+```
+```{r, fig.cap="Porównanie residuów dla modelu ARMA(4,3) z rozkładem normalnym."}
+order=cbind(c(1,1,3), c(5,1,1), c(1,1,4), c(4,1,3), c(1,1,0),c(0,1,2),c(0,1,1))
+qqnorm(stats::arima(BoxCox(X, lambda=0), order = order[,3], method = "ML")$resid)
+```
+Widzimy, że obserwacje na obu wykresach nie ustawiają się w linię prostą, jednak w znaczącym stopniu ją przybliżają.
+
+```{r, results='hide', eval=FALSE}
 
 a=2
 par(mar = c(a, a, a, a))
@@ -416,7 +461,7 @@ pes$p.values
 
 ```
 
-```{r}
+```{r, eval=FALSE}
 
 for(i in 1:length(tmp)) ks.test(tmp[[i]]$residuals, "pnorm")$p.val
 
@@ -448,7 +493,8 @@ for(i in 1:length(tmp)) ks.test(tmp[[i]]$residuals, "pnorm")$p.val
 
 
 ```
-
+\subsection{Istotność współczynników.}
+Sprawdźmy jeszcze czy wszystkie współczyniki są statystycznie istotne.
 ```{r}
 order=cbind(c(1,1,3), c(5,1,1), c(1,1,4), c(4,1,3), c(1,1,0),c(0,1,2),c(0,1,1))
 Wyn=matrix(nrow=2,ncol=length(order[1,]))
@@ -462,13 +508,13 @@ for( i in 1:ncol(order)){
   Wyn[,i]=c(AIC(res)-AIC(pes), BIC(res)-BIC(pes))
 }
 rownames(Wyn)<-c("AIC", "BIC")
-colnames(Wyn)<-apply(order, 2, function(x) paste0("ARMA(",paste(x[1],x[2],x[3], sep = ','),")"))
+colnames(Wyn)<-apply(order, 2, function(x) paste0("ARMA(",paste(x[1],x[3], sep = ','),")"))
 
 kab<-Wyn %>%
   round(digits=3) %>%
   kbl(caption="Różnice między modelem pełnym, a modelem po usunięciu współczynników statystycznie nieistotnych na poziomie istotności 0.05.",booktabs = TRUE) %>%
   kable_paper(full_width = F, ) %>%
-  kable_styling(latex_options = "HOLD_position")
+  kable_styling(latex_options = "HOLD_position", font_size=10)
 
 for(i in 2:(ncol(order)+1)){
   kab <- column_spec(kab, i,  color=ifelse(Wyn[,i-1]<0,"red",
@@ -479,129 +525,172 @@ kab
 
 
 ```
-Dla ostatnich modeli ($ARMA(4,1,3)$, $ARMA(1,1,0)$ $ARMA(0,1,2)$, $ARMA(0,1,1)$) wszystkie współczynniki były istotne statystycznie, zatem różnica dla obu kryteriów jest równa 0 (porównujemy te same modele). Dla modelu $ARMA(1,1,3)$ różnica jest dodatnia, zatem model bez nieistotnych współczynników osiąga mniejsze wartości kryteriów, zatem jest on według nich lepszy. Dla pozostałych modeli, wersja pełna (zawierająca wszystkie współczynniki) okazała się lepsza.
-
+Dla ostatnich modeli ($ARMA(4,3)$, $ARMA(1,0)$ $ARMA(0,2)$, $ARMA(0,1)$) wszystkie współczynniki były istotne statystycznie, zatem różnica dla obu kryteriów jest równa 0 (porównujemy te same modele). Dla modelu $ARMA(1,3)$ różnica jest dodatnia, zatem model bez nieistotnych współczynników osiąga mniejsze wartości kryteriów, zatem jest on według nich lepszy. Dla pozostałych modeli, wersja pełna (zawierająca wszystkie współczynniki) okazała się lepsza. Porównajmy jeszcze jak wyglądają residua dla mniejszych modeli.
 
 ```{r}
-# 
-# pes<-forecast(stats::arima(BoxCox(X, lambda=0), order=c(3,1,2)), lambda=0, h=length(Y))
-# 
-# 
-# autoplot(pes)
-# autoplot(cbind(pes,Y))
-# 
-# 
-# res=data.frame(cbind(pes,Y))
-# inter=linspace(time(Y)[1],time(Y)[length(Y)], length(Y))
-# ggplot(res) + 
-#     geom_ribbon(aes(x=inter,ymin = pes.Lo.95,
-#                   ymax = pes.Hi.95),
-#               fill = "#6092ce",alpha = 5/10) +
-#   geom_ribbon(aes(x=inter,ymin = pes.Lo.80,
-#                   ymax = pes.Hi.80),
-#               fill = "#6962b5",alpha = 5/10) + 
-#   geom_line(aes(x=inter, y=Y))
-# 
-# 
-# 
-# 
-# 
-# ggplot()+                    # basic graphical object
-#   geom_line(aes(y=y1), colour="red") +  # first layer
-#   geom_line(aes(y=y2), colour="green") 
-# autoplot(cbind(pes,Y))
-# cbind(pes,Y)
-# 
-# pes
-# 
-# forecast(tmp[[1]])
-# arima(gnp, order=c(2,1,0))
+order=cbind(c(1,1,3), c(5,1,1), c(1,1,4))
+alpha=0.05
+models=list()
+models.full=list()
+for( i in 1:ncol(order)){
+  res=stats::arima(BoxCox(X, lambda=0), order = order[,i], method = "ML", include.mean = FALSE)
+  fixed=numeric(sum(order[,i])-1)
+  fixed[lmtest::coeftest(res)[,4]<alpha]=NaN
+  models[[i]]=stats::arima(BoxCox(X, lambda=0), order = order[,i], method = "ML", fixed = fixed, include.mean = FALSE)
+  models.full[[i]]=res
+}
+```
+```{r, fig.height=5, fig.width=4, results='hide', eval=FALSE}
+for(i in 1:length(models)){
+  a=2
+  par(mar = c(a, a, a, a))
+  itsmr::test(models[[i]]$residuals)
+  itsmr::test(models.full[[i]]$residuals)
+
+}
+```
+Po wykonaniu podobnych testów jak poprzednio zauważyliśmy, znaczący spadek niektórych p-wartości. Dla modelu drugiego oraz testu Ljungi-Boxa spadła ona z poziomu 0.94 na 0.17. Jednak wnioski z żadnego z testów nie uległy zmianie. Co ciekawe, pomimo, że większość testów wskazywała mniejsze p-wartości dla testów niezależności dla modeli mniejszych, to test znaków (Diff signs) dawał większe p wartości niż dla modeli pełnych. Test McLeod-Li dla wszystkich modeli wskazywał podobne (wysokie) wartości poziomu krytycznego. Sprawdźmy jeszcze jak zachowuje się test normalności dla tych modeli.
+
+```{r}
+tmp.full<-sapply(models.full, function(m) shapiro.test(m$resid)$p.val)
+tmp<-sapply(models, function(m) shapiro.test(m$resid)$p.val)
+
+tmp=cbind(tmp,tmp.full) %>%
+  t()
+
+colnames(tmp)<-apply(order[,1:3], 2, function(ord) paste0("ARMA(",ord[1],",",ord[3],")"))
+rownames(tmp)<-c("Bez stat. nieistotnych","Model pełny")
+
+
+
+kab<- tmp %>%
+  round(digits=3) %>%
+  kbl(caption="p-wartości dla testu shapiro-wilka",booktabs = TRUE) %>%
+  kable_paper(full_width = F, ) %>%
+  kable_styling(latex_options = "HOLD_position")
+for(i in 2:(ncol(tmp)+1)){
+  kab <- column_spec(kab, i,  color=ifelse(tmp[,i-1]<=0.05,"red","green"))
+}
+kab
+```
+Widzimy, że po usunięciu współczynników nieistotnych otrzymaliśmy poprawę p-wartości w teście Shapiro-Wilka w dwóch pierwszych przypadkach, natomiast nieznaczne pogorszenie w trzecim. p-wartość dla modelu $ARMA(1,3)$ stała się znacząco większa, przewyższając wszystkie inne modele. Sprawdźmy jak wyglądają wykres kwantylowy dla tego modelu.
+```{r, fig.height=5, fig.cap="Wykres kwantylowy dla residuów z modelu ARMA(1,3) po usunięciu wspł. nieistotnych (na górze) oraz bez usuwania (na dole)."}
+par(mfrow=c(2,1), mar=c(2,2,2,0))
+qqnorm(models[[1]]$residuals)
+qqnorm(models.full[[1]]$residuals)
+
+```
+Według nas najlepszym modelem okazał się model $ARMA(1,3)$ po usunięciu współczynników nieistotnych. Dodatkowo można rozważyć pełne modele $ARMA(5,1)$ oraz $ARMA(1,4)$, jednak są to modelu dużych rzędów.
+\subsection{Prognoza}
+Zobaczmy, jak nasze modele wyglądają w porównaniu z rzeczywsitymi danymi. Na wykresie zaznaczyliśmy predykcje punktową jak i przedziały ufności 95% oraz 80%.
+```{r}
+order=cbind(c(1,1,3), c(5,1,1), c(1,1,4), c(4,1,3), c(1,1,0),c(0,1,2),c(0,1,1))
+
+ord=order[,1]
+
+pes<-forecast::forecast(stats::arima(BoxCox(X, lambda=0), order=ord, include.mean = F, method = "ML"), lambda=0, h=length(Y))
+res=data.frame(cbind(pes,Y))
+time=linspace(time(Y)[1],time(Y)[length(Y)], length(Y))
+ggplot(res) +
+    geom_ribbon(aes(x=time,ymin = pes.Lo.95,
+                  ymax = pes.Hi.95),
+              fill = "#6092ce",alpha = 5/10) +
+  geom_ribbon(aes(x=time,ymin = pes.Lo.80,
+                  ymax = pes.Hi.80),
+              fill = "#6962b5",alpha = 5/10) +
+  geom_line(aes(x=time, y=Y,color="Rzeczywiste")) +
+  geom_line(aes(x=time, y=pes$mean, color="Predykcja")) +
+  ggtitle("ARIMA(1,1,3) pełny")
+```
+```{r}
+order=cbind(c(1,1,3), c(5,1,1), c(1,1,4), c(4,1,3), c(1,1,0),c(0,1,2),c(0,1,1))
+
+ord=order[,1]
+
+pes<-forecast::forecast(models[[1]], lambda=0, h=length(Y))
+res=data.frame(cbind(pes,Y))
+time=linspace(time(Y)[1],time(Y)[length(Y)], length(Y))
+ggplot(res) +
+    geom_ribbon(aes(x=time,ymin = pes.Lo.95,
+                  ymax = pes.Hi.95),
+              fill = "#6092ce",alpha = 5/10) +
+  geom_ribbon(aes(x=time,ymin = pes.Lo.80,
+                  ymax = pes.Hi.80),
+              fill = "#6962b5",alpha = 5/10) +
+  geom_line(aes(x=time, y=Y,color="Rzeczywiste")) +
+  geom_line(aes(x=time, y=pes$mean, color="Predykcja")) +
+  ggtitle("ARIMA(1,1,3) istotne współ. tylko")
 ```
 
 
-
-
-
-
-
-
 ```{r}
-# 
-# order=list(c(1,1,0), c(0,1,2), c(3,1,2), c(2,1,2), c(3,1,1))
-# 
-# for(ord in order){
-#   tmp=stats::arima(BoxCox(X, lambda=0), order=ord)
-#   
-# 
-#   
-# }
-# 
-# 
-# tmp=diff(BoxCox(X, lambda=0))
-# tmp<-apply(order, 2, function(ord) arima(tmp, order = ord))
-# for(i in 1:5) test(tmp[[i]]$residuals)
-# pes<-forecast(stats::arima(BoxCox(X, lambda=0), order=c(3,1,2)), lambda=0, h=length(Y))
-# 
-# 
-# stats::arima(gnp, order = order[,1], lambda=1)
-# 
-# 
-# 
-# 
-# tmp=stats::arima(BoxCox(X, lambda=0), order=order[[5]])
-# 
-# 
-# stats::arima(BoxCox(X, lambda=0), order=c(2,1,3), include.mean = T,method="ML")
-# stats::arima(diff(BoxCox(X, lambda=0)), order=c(2,0,3), include.mean = F,method="ML")
-# 
-# 
-# 
-# 
-# stats::arima(diff(BoxCox(X, lambda=0)), order=c(1,0,1), include.mean = T)
-# 
-# tmp
 
+order=cbind(c(1,1,3), c(5,1,1), c(1,1,4), c(4,1,3), c(1,1,0),c(0,1,2),c(0,1,1))
 
+ord=order[,2]
+
+pes<-forecast::forecast(stats::arima(BoxCox(X, lambda=0), order=ord, include.mean = F, method = "ML"), lambda=0, h=length(Y))
+res=data.frame(cbind(pes,Y))
+time=linspace(time(Y)[1],time(Y)[length(Y)], length(Y))
+ggplot(res) +
+    geom_ribbon(aes(x=time,ymin = pes.Lo.95,
+                  ymax = pes.Hi.95),
+              fill = "#6092ce",alpha = 5/10) +
+  geom_ribbon(aes(x=time,ymin = pes.Lo.80,
+                  ymax = pes.Hi.80),
+              fill = "#6962b5",alpha = 5/10) +
+  geom_line(aes(x=time, y=Y,color="Rzeczywiste")) +
+  geom_line(aes(x=time, y=pes$mean, color="Predykcja")) +
+  ggtitle("ARIMA(5,1,1)")
 ```
 
+```{r}
+order=cbind(c(1,1,3), c(5,1,1), c(1,1,4), c(4,1,3), c(1,1,0),c(0,1,2),c(0,1,1))
 
+ord=order[,5]
 
+pes<-forecast::forecast(stats::arima(BoxCox(X, lambda=0), order=ord, include.mean = F, method = "ML"), lambda=0, h=length(Y))
+res=data.frame(cbind(pes,Y))
+time=linspace(time(Y)[1],time(Y)[length(Y)], length(Y))
+ggplot(res) +
+    geom_ribbon(aes(x=time,ymin = pes.Lo.95,
+                  ymax = pes.Hi.95),
+              fill = "#6092ce",alpha = 5/10) +
+  geom_ribbon(aes(x=time,ymin = pes.Lo.80,
+                  ymax = pes.Hi.80),
+              fill = "#6962b5",alpha = 5/10) +
+  geom_line(aes(x=time, y=Y,color="Rzeczywiste")) +
+  geom_line(aes(x=time, y=pes$mean, color="Predykcja")) +
+  ggtitle("ARIMA(1,1,0)")
+```
 
+Widzimy, że modele mieszane bardzo dobrze poradziły sobie z predykcją szeregu. Większość obserwacji przyszłych mieści się w przedziale ufności 95%. Usunięcie współczynników nieistotnych nie zmieniło znacząco wyników predykcji. Dla modelu $ARIMA(5,1,1)$ otrzymaliśmy znacząco mniejsze przedziały ufności. Jeśli wybierzemy model wybrany na podstawie funkcji acf i pacf ($AR(1)$) to otrzymamy predykcję całkowicie nie pasującą do przyszłych obserwacji.
+```{r}
+order=cbind(c(1,1,3), c(5,1,1), c(1,1,4), c(4,1,3), c(1,1,0),c(0,1,2),c(0,1,1))
+ord=order[,1]
+pes=list()
+pes[[1]]<-forecast::forecast(stats::arima(BoxCox(X, lambda=0), order=order[,1], include.mean = F, method = "ML"), lambda=0, h=length(Y))
+pes[[2]]<-forecast::forecast(models[[1]], lambda=0, h=length(Y))
+pes[[3]]<-forecast::forecast(stats::arima(BoxCox(X, lambda=0), order=order[,2], include.mean = F, method = "ML"), lambda=0, h=length(Y))
+pes[[4]]<-forecast::forecast(stats::arima(BoxCox(X, lambda=0), order=order[,5], include.mean = F, method = "ML"), lambda=0, h=length(Y))
+tmp<-sapply(1:4, function(i) accuracy(pes[[i]]$mean,Y)) %>% t()
+rownames(tmp)<-c("ARMA(1,3)","ARMA(1,3)-istotne", "ARMA(5,1)", "ARMA(1,0)")
+colnames(tmp)<-colnames(accuracy(pes[[1]]$mean,Y))
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+kol=5
+kab<- tmp[,1:kol] %>%
+  round(digits=3) %>%
+  kbl(caption="Ocena prognoz z wykorzystaniem wybranych kreyteriów.",booktabs = TRUE) %>%
+  kable_paper(full_width = F, ) %>%
+  kable_styling(latex_options = "HOLD_position")
+for(i in 2:(kol+1)){
+  colo=rep("black",4)
+  colo[which.min(abs(tmp[,i-1]))]="green"
+  kab <- column_spec(kab, i,  color=colo)
+}
+kab
+```
+Korzystając z kryteriów takich jak błąd średniokwadratowy (spierwiastkowany), czy średni błąd absolutny, widzimy, że najlepiej dopasowany jest model $ARMA(1,3)$. Wskazuje na to dowolne rozpatrywane kryterium. Dodatkowo możemy zauważyć, że przy usunięciu współczynników nieistotnych pogorszyliśmy jakość predykcji. Zatem najlepszym modelem tutaj okazał się model $ARMA(1,3)$. Model ten został również wskazywany przez wszystkie kryteria informacyjne jako najlepszy pełen model.
 
 
 
@@ -616,21 +705,246 @@ W drugiej części sprawozdania porównany prognozy dla danych \verb|euretail|. 
 ```{r}
 autoplot(euretail)
 ```
+```{r}
+X=window(euretail,end=c(2008,4))
+Y=window(euretail,start=c(2009,1))
+```
+Dane podzieliliśmy na część uczącą zawierającą `r length(X)` obserwacji (`r length(X)/length(euretail)*100` %) oraz część testową zawierającą `r length(Y)` obserwacji (`r length(Y)/length(euretail)*100` %). Dane zostały podzielone względem roku 2009, by w zbiorze uczącym znalazły się początkowe obserwacje, gdy tendencja wzrostowa zmieniła się na spadkową.
+\subsection{Algorytm wygładzania wykładniczego}
+Analizę rozpoczniemy od modeli ETS. Patrząc na dane możemy postulować, że mamy do czynienia z modelem AAA - trend, sezonowość i błąd są addytywne. Model ten jest również zwracany przy wywołaniu funkcji \verb|ets| z wbudowanymi argumentami. Prognozy dla tego modelu prezentują się następująco
+```{r, fig.cap="Predykcja dla modelu ETS"}
+h=length(Y)
+pes<-forecast::forecast(ets(X, model="AAA", damped = F), h=h)
+res=data.frame(cbind(pes,Y))
+time=linspace(time(Y)[1],time(Y)[length(Y)], length(Y))
+ggplot(res) +
+    geom_ribbon(aes(x=time,ymin = pes.Lo.95,
+                  ymax = pes.Hi.95),
+              fill = "#6092ce",alpha = 5/10) +
+  geom_ribbon(aes(x=time,ymin = pes.Lo.80,
+                  ymax = pes.Hi.80),
+              fill = "#6962b5",alpha = 5/10) +
+  geom_line(aes(x=time, y=Y,color="Rzeczywiste")) +
+  geom_line(aes(x=time, y=pes$mean, color="Predykcja")) +
+  ggtitle(pes$model)
+
+```
+Widzimy, że ogólny trend został zachowany, jednak model słabo sobie poradziła w pierwszych momentach predykcji. Sprawdźmy jak będzie wyglądała sytuacja, jeśli wybierzemy tłumiony trend.
+```{r, fig.cap="Predykcja dla modelu ETS"}
+h=length(Y)
+pes<-forecast::forecast(ets(X, model="AAA", damped = T), h=h)
+res=data.frame(cbind(pes,Y))
+time=linspace(time(Y)[1],time(Y)[length(Y)], length(Y))
+ggplot(res) +
+    geom_ribbon(aes(x=time,ymin = pes.Lo.95,
+                  ymax = pes.Hi.95),
+              fill = "#6092ce",alpha = 5/10) +
+  geom_ribbon(aes(x=time,ymin = pes.Lo.80,
+                  ymax = pes.Hi.80),
+              fill = "#6962b5",alpha = 5/10) +
+  geom_line(aes(x=time, y=Y,color="Rzeczywiste")) +
+  geom_line(aes(x=time, y=pes$mean, color="Predykcja")) +
+  ggtitle(pes$model)
+
+```
+Widzimy, że model z tłumionym trendem dużo lepiej sobie poradził z predykcją. Ale jak na razie operowaliśmy na danych nieprzekształconych. Sprawdźmy jak sobie poradzi dla danych po transformacji Boxa-Coxa.
+
+```{r anim, fig.cap="Dopasowanie modelu do danych.",fig.show="animate", cache=TRUE}
+oopt = ani.options(interval=1.5)
+h=length(Y)
+lamb=0:1:50/10
+for (i in 1:length(lamb)) 
+{
+  pes<-forecast::forecast(ets(BoxCox(X,lambda=lamb[i])), lambda=lamb[i], h=h)
+  res=data.frame(cbind(pes,Y))
+  time=linspace(time(Y)[1],time(Y)[length(Y)], length(Y))
+  p<-ggplot(res) +
+      geom_ribbon(aes(x=time,ymin = pes.Lo.95,
+                    ymax = pes.Hi.95),
+                fill = "#6092ce",alpha = 5/10) +
+    geom_ribbon(aes(x=time,ymin = pes.Lo.80,
+                    ymax = pes.Hi.80),
+                fill = "#6962b5",alpha = 5/10) +
+    geom_line(aes(x=time, y=Y,color="Rzeczywiste")) +
+    geom_line(aes(x=time, y=pes$mean, color="Predykcja")) +
+    ggtitle(paste0(pes$model," z lambda = ",lamb[i]))
+  plot(p)
+
+  ani.pause()
+}
+
+ani.options(oopt) 
+```
+Na powyższej animacji możemy zauważyć zachowanie w zależności od wybranej wartości $\lambda$ w przekształceniu Boxa-Coxa. Rodzaj modelu jest wybierany każdorazowo (najlepsza wartość lambda zależała od narzuconego modelu, więc pozwoliliśmy decydować funkcji). Można zauważyć na animacji, że dla większych wartości lambda, jedynie zwiększają się przedziały ufności. Zatem nie ma podstaw by korzystać z wartości automatycznie wybranych przez funkcję \verb|BoxCox.lambda| (`r BoxCox.lambda(X, upper=10, method = "guerrero")%>% round(digits=2)` lub `r BoxCox.lambda(X, upper=10, method = "loglik") %>% round(digits=2)`). Podsumowaliśmy wszystkie informacje w poniższej tabeli.
+
+```{r}
+pes=list()
+pes[[1]]=forecast::forecast(ets(BoxCox(X,lambda=1), model="AAA", damped = F), lambda=1, h=h)
+pes[[2]]=forecast::forecast(ets(BoxCox(X,lambda=1), model="AAA", damped = T), lambda=1, h=h)
+pes[[3]]=forecast::forecast(ets(BoxCox(X,lambda=0), model="AAA", damped = F), lambda=0, h=h)
+pes[[4]]=forecast::forecast(ets(BoxCox(X,lambda=0), model="AAA", damped = T), lambda=0, h=h)
+pes[[5]]=forecast::forecast(ets(BoxCox(X,lambda=0.5), model="AAA", damped = F), lambda=0.5, h=h)
+pes[[6]]=forecast::forecast(ets(BoxCox(X,lambda=0.5), model="AAA", damped = T), lambda=0.5, h=h)
+pes[[7]]=forecast::forecast(ets(BoxCox(X,lambda=5), model="AAA", damped = F), lambda=5, h=h)
+pes[[8]]=forecast::forecast(ets(BoxCox(X,lambda=5), model="AAA", damped = T), lambda=5, h=h)
+pes[[9]]=forecast::forecast(ets(BoxCox(X,lambda=5), model="MAA", damped = F), lambda=5, h=h)
+pes[[10]]=forecast::forecast(ets(BoxCox(X,lambda=5), model="MAA", damped = T), lambda=5, h=h)
+
+res=matrix(nrow=length(pes), ncol=5+1+3)
+
+for(i in 1:length(pes)){
+  res[i,1:5]=accuracy(pes[[i]]$mean,Y)[1:5] %>% round(digits = 2) 
+  res[i,6]=shapiro.test(pes[[i]]$residuals)$p.val %>% round(digits=3)
+  res[i,7:9]=sapply(1:3, function(h) Box.test(pes[[i]]$residuals, lag=h, type="Ljung-Box")$p.val) %>% round(digits=3)
+}
+
+colnames(res)<-c(colnames(accuracy(pes[[i]]$mean,Y))[1:5],"p-val", 1:3)
+rownames(res)<-c(rep(c("A,A,A","A,Ad,A"),4), "M,A,A","M,Ad,A") 
+
+grups=c(1,sort(rep(2,3)),4)
+names(grups)<-c(" ",1,0,0.5,5)
 
 
-```{r,cache=TRUE}
-# autoplot(diff(diff(euretail),lag=4))
-# ndiffs(euretail)
-# nsdiffs(euretail)
+
+kab<- res %>%
+  kbl(caption="Testy dla poszczególnych modeli, pogrupowanych względem transformacji boxa-coxa.",booktabs = TRUE) %>%
+  kable_paper(full_width = F, ) %>%
+  kable_styling(latex_options = "HOLD_position", font_size=10) %>%
+  add_header_above(c("Model"=1, "Miary dopasowania"=5, "SW test"=1, "Test Ljungi-Boxa"=3)) %>%
+  pack_rows(index = grups[-1])
+for(i in 2:6){
+  col=rep("black", length(pes))
+  col[which.min(abs(res[,i-1]))]="green"
+  kab <- column_spec(kab, i,  color=col)
+}
+for(i in 7:7){
+  kab <- column_spec(kab, i,  color=ifelse(res[,i-1]<=0.05,"red","green"))
+}
+for(i in 8:10){
+  kab <- column_spec(kab, i,  color=ifelse(res[,i-1]<=0.05,"red","green"))
+}
+
+kab
+
+
+```
+Widzimy, że mamy dwa konkurencyjne modele. Oba mają błąd, trend oraz sezonowość addytywną. Różnią się zastosowaną transformacją Boxa-Coxa. Pierwszy model jest dla przekształcenia logarytmicznego oraz na jego przewagę wskazują kryteria RMSE, MAE oraz MAPE, czyli te które rozpatrują jedynie pozytywne wartości błędu (dodanie obserwacji do predykcji nie zmniejsza błędu). Dlatego ten model wydaje się lepszy. Dodatkowo przechodzi on test na niezależność (Ljungi-Boxa dla 3 pierwszych opóźnień) oraz test normalności reszt Shapiro-Wilka. Warto nadmienić, że miary dopasowania były liczone dla prognoz, podczas gdy pozostałe testy były wykonywane na zbiorze uczącym, na danych historycznych.
+
+```{r}
+pes=list()
+pes[[1]]=forecast::forecast(ets(BoxCox(X,lambda=1), model="AAA", damped = F), lambda=1, h=h)
+pes[[2]]=forecast::forecast(ets(BoxCox(X,lambda=1), model="AAA", damped = T), lambda=1, h=h)
+pes[[3]]=forecast::forecast(ets(BoxCox(X,lambda=0), model="AAA", damped = F), lambda=0, h=h)
+pes[[4]]=forecast::forecast(ets(BoxCox(X,lambda=0), model="AAA", damped = T), lambda=0, h=h)
+pes[[5]]=forecast::forecast(ets(BoxCox(X,lambda=0.5), model="AAA", damped = F), lambda=0.5, h=h)
+pes[[6]]=forecast::forecast(ets(BoxCox(X,lambda=0.5), model="AAA", damped = T), lambda=0.5, h=h)
+pes[[7]]=forecast::forecast(ets(BoxCox(X,lambda=5), model="AAA", damped = F), lambda=5, h=h)
+pes[[8]]=forecast::forecast(ets(BoxCox(X,lambda=5), model="AAA", damped = T), lambda=5, h=h)
+pes[[9]]=forecast::forecast(ets(BoxCox(X,lambda=5), model="MAA", damped = F), lambda=5, h=h)
+pes[[10]]=forecast::forecast(ets(BoxCox(X,lambda=5), model="MAA", damped = T), lambda=5, h=h)
+
+
+res=matrix(nrow=length(pes), ncol=5)
+lamb=c(1,1,0,0,0.5,0.5,5,5,5,5)
+for(i in 1:length(pes)){
+  res[i,1:5]=accuracy(BoxCoxInv(pes[[i]]$fitted,lambda=lamb[i]),X)[1:5] %>% round(digits = 5) 
+}
+
+colnames(res)<-colnames(accuracy(pes[[i]]$mean,Y))[1:5]
+rownames(res)<-c(rep(c("A,A,A","A,Ad,A"),4), "M,A,A","M,Ad,A") 
+
+grups=c(1,sort(rep(2,3)),4)
+names(grups)<-c(" ",1,0,0.5,5)
+
+
+
+kab<- res %>%
+  kbl(caption="Miary dopasowania poszczególnych modeli, pogrupowanych względem transformacji boxa-coxa, dla zbioru uczącego.",booktabs = TRUE) %>%
+  kable_paper(full_width = F, ) %>%
+  kable_styling(latex_options = "HOLD_position", font_size=10) %>%
+  add_header_above(c("Model"=1, "Miary dopasowania"=5)) %>%
+  pack_rows(index = grups[-1])
+for(i in 2:6){
+  col=rep("black", length(pes))
+  col[which.min(abs(res[,i-1]))]="green"
+  kab <- column_spec(kab, i,  color=col)
+}
+
+
+kab
+
+
+```
+Co ciekawe, możemy zauważyć, że teraz wygrywają modele, które w poprzednich konkurencja odstawały znacząco od zwycięzców.
+```{r}
+year=2008
+X=window(euretail,end=c(year-1,4))
+Y=window(euretail,start=c(year,1))
+```
+Sprawdźmy jeszcze jak by wyglądałaby prognoza dla najlepszego modelu (A,A,A dla lambdy=0), jeśli wybralibyśmy mniejszy zbiór uczący. Teraz granicą między zbiorami jest rok 2008 a nie 2009. Zbiór uczący zawiera `r length(X)/length(euretail)` obserwacji, jednak są to obserwacje przed zmianą kierunku trendu. Prognoza wygląda następująco.
+
+
+```{r, fig.cap="Predykcja dla innego wyboru zbioru uczącego i testowego."}
+h=length(Y)
+pes<-forecast::forecast(ets(BoxCox(X, lambda=0), model = "AAA", damped = T), lambda=0, h=h)
+res=data.frame(cbind(pes,Y))
+time=linspace(time(Y)[1],time(Y)[length(Y)], length(Y))
+ggplot(res) +
+    geom_ribbon(aes(x=time,ymin = pes.Lo.95,
+                  ymax = pes.Hi.95),
+              fill = "#6092ce",alpha = 5/10) +
+  geom_ribbon(aes(x=time,ymin = pes.Lo.80,
+                  ymax = pes.Hi.80),
+              fill = "#6962b5",alpha = 5/10) +
+  geom_line(aes(x=time, y=Y,color="Rzeczywiste")) +
+  geom_line(aes(x=time, y=pes$mean, color="Predykcja")) +
+  ggtitle(paste0(ets(BoxCox(X, lambda=0), model = "AAA", damped = T)$method, " z lambda=",0))
+
+
+
+```
+```{r}
+year=2009
+X=window(euretail,end=c(year-1,4))
+Y=window(euretail,start=c(year,1))
+```
+Widzimy, że w tym przypadku predykacja okazała się całkowicie nie trafiona.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+\subsection{SARIMA}
+Drugą rozpatrywaną metodą będzie skorzystanie z znanych już nam modeli SARIMA. Dodatkowo w tym przypadku skorzystamy z różnicowań zwykłych, jak i sezonowych. Po przetestowaniu różnych wariantów najlepszą transformacją wstępną okazała się ponownie transformacja logarytmiczna. W tym przypadku do uzyskania danych stacjonarnych były potrzebne dwa różnicowania zwykłe oraz jedno sezonowe. Jest to inny wynik niż wskazuje funkcja \verb|ndiffs| (czyli 1). Jednak jeśli zwiększylibyśmy wielkość zbioru uczącego, to moglibyśmy właśnie dostać wartość 2. Zatem możliwe, że dodatkowe różnicowanie lepiej dopasuje się do naszych danych (które przypominają delikatnie odwróconą parabolę). Wynik przekształceń przedstawiliśmy poniżej.
+```{r,cache=TRUE, eval=FALSE}
+#tmp=BoxCox(X, lambda="auto")
+#autoplot(tmp)
+# ndiffs(tmp)
+# nsdiffs(tmp)
 # 
 # auto.arima(euretail)
-# BoxCox.lambda(euretail ,upper = 5)
-# BoxCox.lambda(euretail, method = "loglik")
+#BoxCox.lambda(X ,upper = 5)
+#BoxCox.lambda(X, method = "loglik",upper = 8)
 # 
 # auto.arima(BoxCox(euretail, lambda=1.85))
 
 
-ggtsdisplay(diff(diff(BoxCox(euretail, lambda=0),lag=4)))
+#ggtsdisplay(diff(diff(BoxCox(euretail, lambda=0),lag=4)))
 
 
 #cross(0:2,0:2)
@@ -647,25 +961,34 @@ ggtsdisplay(diff(diff(BoxCox(euretail, lambda=0),lag=4)))
 
 #pes=apply(as.matrix(expand.grid(0:2,0:3)), 1, function(p) paste(p[1],p[2]))
 
-
+#ndiffs(BoxCox(X, lambda=0))
 ```
 
+```{r}
+tmp = X %>% BoxCox(lambda=0) %>% diff(differences = 2) %>% diff(lag=4)
 
+#sapply(1:5, function(h) adf.test(tmp, k=h)$p.val)
+#kpss.test(tmp, null = "Level", lshort = FALSE)
+ggtsdisplay(tmp)
+```
+Widzimy, że funkcja pacf szybko zanika do zera. Natomiast dla wielu opóźnień funkcja acf przyjmuje wartości na granicy istotności. Jednak te wartości głównie pojawiają się w opóźnieniach 4k lub 4k+1. Dodatkowo jak spojrzymy na wartości szeregu po różnicowaniu w ostatnich momentach zauważymy, że jest on niemal stały. Wynika to z zmienienia kierunku trendu w tym okresie.
+
+Sprawdźmy jak wyglądają kryteria informacyjne dla tego szeregu.
 ```{r seasona_criterion,cache=TRUE}
 
 
 ord=4
 s.ord=2
 
-tmp=BoxCox(euretail, lambda=0)
+tmp=BoxCox(X, lambda=0)
 mat=apply(as.matrix(expand.grid(0:ord,0:s.ord)), 1, function(P)
       apply(as.matrix(expand.grid(0:ord,0:s.ord)), 1, function(Q)
-         arima(tmp, order=c(P[1],1,Q[1]), seasonal = c(P[2],1,Q[2]), include.mean=T)$log))
+         stats::arima(tmp, order=c(P[1],2,Q[1]), seasonal = c(P[2],1,Q[2]), include.mean=F)$log))
 
 
 k=apply(as.matrix(expand.grid(0:ord,0:s.ord)), 1, function(P)
     apply(as.matrix(expand.grid(0:ord,0:s.ord)), 1, function(Q)
-        1+sum(P)+sum(Q)+inc.mean))
+        1+sum(P)+sum(Q)+0))
 
 #k
 
@@ -702,7 +1025,7 @@ for(i in 2:(ncol(BIC)+1)){
 
 kab.aic<-(AIC-min(AIC)) %>%
   round(digits=1) %>%
-  kbl(caption="Wartości kryterium BIC. Numer kolumny wyznacza rząd modelu AR, podczas gdy numer wiersza rząd modelu MA.",booktabs = TRUE) %>%
+  kbl(caption="Wartości kryterium AIC. Numer kolumny wyznacza rząd modelu AR, podczas gdy numer wiersza rząd modelu MA.",booktabs = TRUE) %>%
   kable_paper(full_width = F, ) %>%
   kable_styling(latex_options = "HOLD_position", font_size=10) %>%
   add_header_above(grups) %>%
@@ -714,7 +1037,7 @@ for(i in 2:(ncol(BIC)+1)){
 
 kab.aicc<-(AICc-min(AICc)) %>%
   round(digits=1) %>%
-  kbl(caption="Wartości kryterium BIC. Numer kolumny wyznacza rząd modelu AR, podczas gdy numer wiersza rząd modelu MA.",booktabs = TRUE) %>%
+  kbl(caption="Wartości kryterium AICc. Numer kolumny wyznacza rząd modelu AR, podczas gdy numer wiersza rząd modelu MA.",booktabs = TRUE) %>%
   kable_paper(full_width = F, ) %>%
   kable_styling(latex_options = "HOLD_position", font_size=10) %>%
   add_header_above(grups) %>%
@@ -730,6 +1053,388 @@ kab.aicc
 
 
 ```
+Widać, że wszystkie kryteria wskazują zgodnie model $SARMA(0,1)(0,1)[4]$. Również modelami możliwymi do rozpatrzenia są modele $SARMA(0,1)(0,2)[4]$ oraz $SARMA(0,1)(1,1)[4]$.
+```{r, eval=TRUE, results='hide'}
+order=list(c(0,1,0,1), c(0,1,0,2), c(0,1,1,1))
+models.full=list()
+models=list()
+for( i in 1:length(order)){
+  ord=c(order[[i]][1],2,order[[i]][2])
+  ord.ses=c(order[[i]][3],1,order[[i]][4])
+  res=stats::arima(BoxCox(X, lambda=0), order = ord, seasonal =ord.ses, include.mean = FALSE)
+  fixed=numeric(sum(order[[i]]))
+  fixed[lmtest::coeftest(res)[,4]<alpha]=NaN
+  models[[i]]=stats::arima(BoxCox(X, lambda=0), order = ord, seasonal =ord.ses, fixed = fixed, include.mean = FALSE)
+  models.full[[i]]=res
+}
+
+sapply(1:3, function(i) AIC(models[[i]])-AIC(models.full[[i]]))
+
+
+```
+W modelach tych albo nie występują współczynniki statystycznie nieistotne, albo po usunięciu ich otrzymujemy inny rozpatrywany już model. Dlatego tą część analizy (istotność współczynników) zakończymy na tych dwóch krótkich zdaniach.
+
+```{r}
+h=length(Y)
+pes=list()
+pes[[1]]=forecast::forecast(models.full[[1]], lambda=0, h=h)
+pes[[2]]=forecast::forecast(models.full[[2]], lambda=0, h=h)
+pes[[3]]=forecast::forecast(models.full[[3]], lambda=0, h=h)
+
+
+res=matrix(nrow=length(pes), ncol=5+1+3)
+
+for(i in 1:length(pes)){
+  res[i,1:5]=accuracy(pes[[i]]$mean,Y)[1:5] %>% round(digits = 3) 
+  res[i,6]=shapiro.test(pes[[i]]$residuals)$p.val %>% round(digits=3)
+  res[i,7:9]=sapply(1:3, function(h) Box.test(pes[[i]]$residuals, lag=h, type="Ljung-Box")$p.val) %>% round(digits=3)
+}
+
+
+
+colnames(res)<-c(colnames(accuracy(pes[[i]]$mean,Y))[1:5],"p-val", 1:3)
+rownames(res)<-sapply(1:length(models), function(i) paste0("SARIMA(",
+  models.full[[i]]$arma[1],",",2,",",models.full[[i]]$arma[2],")(",
+  models.full[[i]]$arma[3],",",1,",",models.full[[i]]$arma[4],")[4]"))
+
+
+
+
+
+kab<- res %>%
+  kbl(caption="Testy dla poszczególnych modeli.",booktabs = TRUE) %>%
+  kable_paper(full_width = F, ) %>%
+  kable_styling(latex_options = "HOLD_position", font_size=10) %>%
+  add_header_above(c("Model"=1, "Miary dopasowania"=5, "SW test"=1, "Test Ljungi-Boxa"=3))
+for(i in 2:6){
+  col=rep("black", length(pes))
+  col[which.min(abs(res[,i-1]))]="green"
+  kab <- column_spec(kab, i,  color=col)
+}
+for(i in 7:7){
+  kab <- column_spec(kab, i,  color=ifelse(res[,i-1]<=0.05,"red","green"))
+}
+for(i in 8:10){
+  kab <- column_spec(kab, i,  color=ifelse(res[,i-1]<=0.05,"red","green"))
+}
+
+kab
+
+```
+Podobnie jak wcześniej, na powyższej tabeli zamieściliśmy miary dopasowania dla prognoz oraz wartości testów dla residuów zbioru uczącego. Widzimy, że wszystkie modele przechodzą testy niezależności oraz normalności. Dodatkowo najlepiej dopasowanym modelem (względem kryteriów RMSE, MAE, MAPE) okazał się model $SARIMA(0,2,1)(0,1,2)[4]$. Sprawdźmy jeszcze jak wygląda dopasowanie modelu do zbioru uczącego.
+```{r}
+res=matrix(nrow=length(pes), ncol=5)
+
+for(i in 1:length(pes)){
+  res[i,1:5]=accuracy(BoxCoxInv(pes[[i]]$fitted, lambda=0),X)[1:5] %>% round(digits = 3) 
+
+}
+
+
+
+colnames(res)<-c(colnames(accuracy(pes[[i]]$mean,Y))[1:5])
+rownames(res)<-sapply(1:length(models), function(i) paste0("SARIMA(",
+  models.full[[i]]$arma[1],",",2,",",models.full[[i]]$arma[2],")(",
+  models.full[[i]]$arma[3],",",1,",",models.full[[i]]$arma[4],")[4]"))
+
+kab<- res %>%
+  kbl(caption="Miary dopasowanie dla modeli na zbiorze uczącym.",booktabs = TRUE) %>%
+  kable_paper(full_width = F, ) %>%
+  kable_styling(latex_options = "HOLD_position", font_size=10) %>%
+  add_header_above(c("Model"=1, "Miary dopasowania"=5))
+for(i in 2:6){
+  col=rep("black", length(pes))
+  col[which.min(abs(res[,i-1]))]="green"
+  kab <- column_spec(kab, i,  color=col)
+}
+
+
+kab
+```
+Co ciekawe, podobnie jak dla wygładzania wykładniczego, model który gorzej był dopasowany na zbiorze testowym, jest lepiej (w zależności od kryterium) dopasowanych niż pozostałe. Natomiast model drugi ponownie wygrał pod względem kryterium średniego błędu bezwzględnego. Spójrzmy jeszcze na predykcję przy z przedziałami ufności.
+
+```{r, fig.cap="Predykcja przy pomocy modelu SARIMA."}
+h=length(Y)
+pes<-forecast::forecast(models.full[[1]], lambda=0, h=h)
+res=data.frame(cbind(pes,Y))
+time=linspace(time(Y)[1],time(Y)[length(Y)], length(Y))
+ggplot(res) +
+    geom_ribbon(aes(x=time,ymin = pes.Lo.95,
+                  ymax = pes.Hi.95),
+              fill = "#6092ce",alpha = 5/10) +
+  geom_ribbon(aes(x=time,ymin = pes.Lo.80,
+                  ymax = pes.Hi.80),
+              fill = "#6962b5",alpha = 5/10) +
+  geom_line(aes(x=time, y=Y,color="Rzeczywiste")) +
+  geom_line(aes(x=time, y=pes$mean, color="Predykcja")) +
+  ggtitle(pes$model)
+
+
+```
+```{r, fig.cap="Predykcja przy pomocy modelu SARIMA."}
+h=length(Y)
+pes<-forecast::forecast(models.full[[2]], lambda=0, h=h)
+res=data.frame(cbind(pes,Y))
+time=linspace(time(Y)[1],time(Y)[length(Y)], length(Y))
+ggplot(res) +
+    geom_ribbon(aes(x=time,ymin = pes.Lo.95,
+                  ymax = pes.Hi.95),
+              fill = "#6092ce",alpha = 5/10) +
+  geom_ribbon(aes(x=time,ymin = pes.Lo.80,
+                  ymax = pes.Hi.80),
+              fill = "#6962b5",alpha = 5/10) +
+  geom_line(aes(x=time, y=Y,color="Rzeczywiste")) +
+  geom_line(aes(x=time, y=pes$mean, color="Predykcja")) +
+  ggtitle(pes$model)
+
+
+```
+```{r, fig.cap="Predykcja przy pomocy modelu SARIMA."}
+h=length(Y)
+pes<-forecast::forecast(models.full[[3]], lambda=0, h=h)
+res=data.frame(cbind(pes,Y))
+time=linspace(time(Y)[1],time(Y)[length(Y)], length(Y))
+ggplot(res) +
+    geom_ribbon(aes(x=time,ymin = pes.Lo.95,
+                  ymax = pes.Hi.95),
+              fill = "#6092ce",alpha = 5/10) +
+  geom_ribbon(aes(x=time,ymin = pes.Lo.80,
+                  ymax = pes.Hi.80),
+              fill = "#6962b5",alpha = 5/10) +
+  geom_line(aes(x=time, y=Y,color="Rzeczywiste")) +
+  geom_line(aes(x=time, y=pes$mean, color="Predykcja")) +
+  ggtitle(pes$model)
+
+
+```
+Wszystkie modele zadowalająco poradziły sobie z predykcją przyszłych wartości. Tak jak poprzednio, spójrzmy jeszcze, co by było, gdybyśmy wybrali inny rok, rozdzielający na zbiór uczący i testowy (a dokładnie rok 2008).
+```{r, fig.cap="Predykcja przy pomocy modelu SARIMA dla innego podziału na zbiory."}
+year=2008
+X=window(euretail,end=c(year-1,4))
+Y=window(euretail,start=c(year,1))
+res=stats::arima(BoxCox(X, lambda=0), order = c(0,2,1), seasonal =c(0,1,1), include.mean = FALSE)
+h=length(Y)
+pes<-forecast::forecast(res, lambda=0, h=h)
+res=data.frame(cbind(pes,Y))
+time=linspace(time(Y)[1],time(Y)[length(Y)], length(Y))
+ggplot(res) +
+    geom_ribbon(aes(x=time,ymin = pes.Lo.95,
+                  ymax = pes.Hi.95),
+              fill = "#6092ce",alpha = 5/10) +
+  geom_ribbon(aes(x=time,ymin = pes.Lo.80,
+                  ymax = pes.Hi.80),
+              fill = "#6962b5",alpha = 5/10) +
+  geom_line(aes(x=time, y=Y,color="Rzeczywiste")) +
+  geom_line(aes(x=time, y=pes$mean, color="Predykcja")) +
+  ggtitle(pes$model)
+
+
+```
+Tak samo jak wcześniej, predykcja okazuje się nietrafiona.
+
+```{r}
+year=2009
+X=window(euretail,end=c(year-1,4))
+Y=window(euretail,start=c(year,1))
+
+```
+\subsection{Dekompozycja}
+Ostatnią rozpatrywaną metodą będzie wykorzystanie funkcję \verb|stl|. Spójrzmy, jak wygląda dopasowanie modelu do danych.
+```{r eval=FALSE}
+### Zwiększenie s.degree lub t.degree psuje predykcję. Większe okna też nie są najlepsze
+h=length(Y)
+
+
+stl(X, s.window = 7, s.degree = 0, t.degree = 0) -> tmp
+
+
+stl(BoxCox(X, lambda=0), s.window = 7, s.degree = 0, t.degree = 0) %>% forecast::forecast(h=h, lambda=0) ->pes
+
+
+#pes<-forecast::forecast(tslm(X ~ poly(trend,2,raw=TRUE) + season),h=h)
+res=data.frame(cbind(pes,Y))
+time=linspace(time(Y)[1],time(Y)[length(Y)], length(Y))
+ggplot(res) +
+    geom_ribbon(aes(x=time,ymin = pes.Lo.95,
+                  ymax = pes.Hi.95),
+              fill = "#6092ce",alpha = 5/10) +
+  geom_ribbon(aes(x=time,ymin = pes.Lo.80,
+                  ymax = pes.Hi.80),
+              fill = "#6962b5",alpha = 5/10) +
+  geom_line(aes(x=time, y=Y,color="Rzeczywiste")) +
+  geom_line(aes(x=time, y=pes$mean, color="Predykcja")) +
+  ggtitle(pes$model)
+```
+
+
+```{r}
+h=length(Y)
+pes=list()
+
+pes[[1]]=forecast::forecast(
+  stl(BoxCox(X,lambda=1), s.window = 7, s.degree = 0, t.degree = 0, t.window = 7),
+  lambda=1, h=h)
+pes[[2]]=forecast::forecast(
+  stl(BoxCox(X,lambda=1), s.window = 7, s.degree = 0, t.degree = 0, t.window = 13),
+  lambda=1, h=h)
+pes[[3]]=forecast::forecast(
+  stl(BoxCox(X,lambda=1), s.window = 13, s.degree = 0, t.degree = 0, t.window = 7),
+  lambda=1, h=h)
+pes[[4]]=forecast::forecast(
+  stl(BoxCox(X,lambda=1), s.window = 13, s.degree = 0, t.degree = 0, t.window = 13),
+  lambda=1, h=h)
+pes[[5]]=forecast::forecast(
+  stl(BoxCox(X,lambda=0), s.window = 7, s.degree = 0, t.degree = 0, t.window = 7),
+  lambda=0, h=h)
+pes[[6]]=forecast::forecast(
+  stl(BoxCox(X,lambda=0), s.window = 7, s.degree = 0, t.degree = 0, t.window = 13),
+  lambda=0, h=h)
+pes[[7]]=forecast::forecast(
+  stl(BoxCox(X,lambda=0), s.window = 13, s.degree = 0, t.degree = 0, t.window = 7),
+  lambda=0, h=h)
+pes[[8]]=forecast::forecast(
+  stl(BoxCox(X,lambda=0), s.window = 13, s.degree = 0, t.degree = 0, t.window = 13),
+  lambda=0, h=h)
+
+res=matrix(nrow=length(pes), ncol=5+1+3)
+
+for(i in 1:length(pes)){
+  res[i,1:5]=accuracy(pes[[i]]$mean,Y)[1:5] %>% round(digits = 3) 
+  res[i,6]=shapiro.test(pes[[i]]$residuals)$p.val %>% round(digits=3)
+  res[i,7:9]=sapply(1:3, function(h) Box.test(pes[[i]]$residuals, lag=h, type="Ljung-Box")$p.val) %>% round(digits=3)
+}
+
+
+
+colnames(res)<-c(colnames(accuracy(pes[[i]]$mean,Y))[1:5],"p-val", 1:3)
+rownames(res)<-rep(c("7/7", "13/7", "7/13","13/13"),2)
+
+grups=c(1,4,4)
+names(grups)<-c(" ",1,0)
+
+
+kab<- res %>%
+  kbl(caption="Testy dla poszczególnych modeli pogrupowany względem przekształcenia Boxa-Coxa. Model x/y oznacza wielkość okna dla trendu x oraz wielkość okna dla sezonowości y.",booktabs = TRUE) %>%
+  kable_paper(full_width = F, ) %>%
+  kable_styling(latex_options = "HOLD_position", font_size=10) %>%
+  add_header_above(c("Model"=1, "Miary dopasowania"=5, "SW test"=1, "Test Ljungi-Boxa"=3)) %>%
+  pack_rows(index = grups[-1])
+for(i in 2:6){
+  col=rep("black", length(pes))
+  col[which.min(abs(res[,i-1]))]="green"
+  kab <- column_spec(kab, i,  color=col)
+}
+for(i in 7:7){
+  kab <- column_spec(kab, i,  color=ifelse(res[,i-1]<=0.05,"red","green"))
+}
+for(i in 8:10){
+  kab <- column_spec(kab, i,  color=ifelse(res[,i-1]<=0.05,"red","green"))
+}
+
+kab
+
+
+```
+Tabela ta, tak jak dwa poprzednie razy, oznacza miary dopasowania na zbiorze testowym oraz testy normalności oraz niezależności na dla residuów z zbioru uczącego. Jak widzimy, modele w znacznej większości przeszły wszystkie testy. Jednocześnie, co nie zdażyło się wcześniej, otrzymaliśmy model, który jest lepszy od pozostałych zględem dowolnej miary dopasowania. Sprawdźmy jak wygląda sytuacja na zbiorze uczącym.
+```{r}
+res=matrix(nrow=length(pes), ncol=5)
+
+for(i in 1:length(pes)){
+  res[i,1:5]=accuracy(pes[[i]]$fitted,X)[1:5] %>% round(digits = 3) 
+}
+
+
+colnames(res)<-c(colnames(accuracy(pes[[i]]$mean,Y))[1:5])
+rownames(res)<-rep(c("7/7", "13/7", "7/13","13/13"),2)
+
+grups=c(1,4,4)
+names(grups)<-c(" ",1,0)
+
+
+kab<- res %>%
+  kbl(caption="Miary dokładności dla poszczególnych modeli pogrupowany względem przekształcenia Boxa-Coxa na zbiorze uczącym. Model x/y oznacza wielkość okna dla trendu x oraz wielkość okna dla sezonowości y.",booktabs = TRUE) %>%
+  kable_paper(full_width = F, ) %>%
+  kable_styling(latex_options = "HOLD_position", font_size=10) %>%
+  add_header_above(c("Model"=1, "Miary dopasowania"=5)) %>%
+  pack_rows(index = grups[-1])
+for(i in 2:6){
+  col=rep("black", length(pes))
+  col[which.min(abs(res[,i-1]))]="green"
+  kab <- column_spec(kab, i,  color=col)
+}
+
+kab
+
+
+```
+Tutaj, podobnie jak wcześniej, najlepszy (pod względem miar RMSE, MAE, MAPE) okazał się inny model, nie konkurencyjny z modelami najlepszymi na zbiorze testowym. Jednak w tym przypadku nasz model 13/7 delikatnie przegrywa z lepszymi modelami. Sprawdźmy jak wygląda prognoza dla tego modelu.
+```{r, fig.cap="Prognozy dla modelu STL"}
+h=length(Y)
+
+
+
+stl(BoxCox(X, lambda=0), s.window = 7, s.degree = 0, t.degree = 0, t.window = 13) %>% forecast::forecast(h=h, lambda=0) ->pes
+
+
+#pes<-forecast::forecast(tslm(X ~ poly(trend,2,raw=TRUE) + season),h=h)
+res=data.frame(cbind(pes,Y))
+time=linspace(time(Y)[1],time(Y)[length(Y)], length(Y))
+ggplot(res) +
+    geom_ribbon(aes(x=time,ymin = pes.Lo.95,
+                  ymax = pes.Hi.95),
+              fill = "#6092ce",alpha = 5/10) +
+  geom_ribbon(aes(x=time,ymin = pes.Lo.80,
+                  ymax = pes.Hi.80),
+              fill = "#6962b5",alpha = 5/10) +
+  geom_line(aes(x=time, y=Y,color="Rzeczywiste")) +
+  geom_line(aes(x=time, y=pes$mean, color="Predykcja")) +
+  ggtitle("Model 13/7")
+```
+Widzimy, że tak jak w przypadku poprzednich modeli, rzeczywiste przyszłe wartości mieszczą się w większości w przedziałach ufności 95%. Spójrzmy ponownie co by było, jeśli dobrzlibyśmy inny rozmiar zbioru uczącego.
+```{r, fig.cap="Prognozy dla modelu STL"}
+year=2008
+X=window(euretail,end=c(year-1,4))
+Y=window(euretail,start=c(year,1))
+h=length(Y)
+
+
+
+stl(BoxCox(X, lambda=0), s.window = 7, s.degree = 0, t.degree = 0, t.window = 13) %>% forecast::forecast(h=h, lambda=0) ->pes
+
+
+#pes<-forecast::forecast(tslm(X ~ poly(trend,2,raw=TRUE) + season),h=h)
+res=data.frame(cbind(pes,Y))
+time=linspace(time(Y)[1],time(Y)[length(Y)], length(Y))
+ggplot(res) +
+    geom_ribbon(aes(x=time,ymin = pes.Lo.95,
+                  ymax = pes.Hi.95),
+              fill = "#6092ce",alpha = 5/10) +
+  geom_ribbon(aes(x=time,ymin = pes.Lo.80,
+                  ymax = pes.Hi.80),
+              fill = "#6962b5",alpha = 5/10) +
+  geom_line(aes(x=time, y=Y,color="Rzeczywiste")) +
+  geom_line(aes(x=time, y=pes$mean, color="Predykcja")) +
+  ggtitle("Model 13/7")
+```
+Tak jak wcześniej, prognoza jest niewłaściwa.
+
+\subsection{Podsumowanie}
+W sprawozdaniu mogliśmy zauważyć, że najlepsze dopasowanie dostawaliśmy przeważnie po zastosowaniu transformaty Boxa-Coxa z parametrem $\lambda=0$. Najlepszym modelem (do naszych danych) okazał się model ETS(A,A,A) (z transformacją wspomnianą wcześniej). Miary dopasowania (RMSE, MAE,MAPE) były najmniejsze na zbiorze testowym spośród wszystkich rozpatrywanych modeli. Na zbiorze uczącym pojawiały się modele o mniejszym błędzie (z tych wspomnianych wcześniej), jednak różnica ta była na drugim miejscu znaczącym liczby. Model, oprócz tego, że okazał się najlepszy, był znacznie łatwiejszy do zastosowania, niż przykładowo modele z rodziny \verb|SARIMA|. Przeszedł on testy niezależności (Ljungi-Boxa) i normalności (Shapiro-Wilka), jednak p-wartość tego drugiego testu była nieznacznie wyższ od poziomu krytycznego (wyniosła 0.075), podczas gdy inne dobre modele (SARIMA, dekompozycji) przechodziły ten test bez większych podejrzeń.
+
+Dodatkowo, pokazaliśmy, że bardzo ważne jest dobranie odpowiednich zbiorów uczących i testowych. Jeżeli w zbiorze testowym pojawiła się jakaś niereguralność, to prognozy okazywały się nietrafne.
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

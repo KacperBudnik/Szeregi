@@ -235,7 +235,7 @@ Forecast<-predict(ar(X, aic=F, order.max = 3), n.ahead = 10)$pred %>%
   diffinv(xi=globtemp[length(globtemp)])
 autoplot(cbind(globtemp,Forecast)) + ylab("Temp")
 ```
-Możemy zauważyć, że według naszej prognozy, w najbliższych latach temperatura delikatnie spadnie, jednak w ciągu 10 lat będzie zachowywać trend dodatni i ostatecznie temepratura będzie wyższa niż w poprzednich okresach. Możemy zobaczyć jak będzie wyglądała predykcja na dłuższy okres.
+Możemy zauważyć, że według naszej prognozy, w najbliższych latach temperatura delikatnie spadnie, jednak w ciągu 10 lat będzie zachowywać trend dodatni i ostatecznie temperatura będzie wyższa niż w poprzednich okresach. Możemy zobaczyć jak będzie wyglądała predykcja na dłuższy okres.
 
 ```{r, fig.cap="Dane podstawowe z predykcją na 50 lat"}
 Forecast<-predict(ar(X, aic=F, order.max = 3), n.ahead = 50)$pred %>%

@@ -98,3 +98,11 @@
 3/Spraw3.log
 3/Spraw3.tex
 *.log
+*.RData
+*.rdb
+*.rdx
+*.RData
+4/Spraw4_cache/latex/__packages
+*.pdf
+*.pdf
+2 2/figure/anim-3.pdf
